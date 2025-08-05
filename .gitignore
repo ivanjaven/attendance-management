@@ -1,0 +1,17 @@
+# .NET
+/backend/*/bin/
+/backend/*/obj/
+*.csproj.user
+*.suo
+*.pdb
+
+# Node.js
+/frontend/*/node_modules/
+/frontend/*/dist/
+
+# XAMPP
+/htdocs/
+
+# Environment
+*.env
+appsettings.Development.json
