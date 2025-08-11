@@ -3,6 +3,7 @@ import cors from "cors";
 import helmet from "helmet";
 import morgan from "morgan";
 import dotenv from "dotenv";
+import { testConnection } from "./config/database";
 
 dotenv.config();
 
@@ -22,18 +23,15 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 // Routes
-app.get("/api/health", (req, res) => {
+app.get("/api/health", async (req, res) => {
+  const dbConnected = await testConnection();
   res.json({
     status: "OK",
     timestamp: new Date().toISOString(),
     service: "attendance-system-api",
+    database: dbConnected ? "Connected" : "Disconnected",
   });
 });
-
-// TODO: Add route imports here
-// app.use('/api/auth', authRoutes);
-// app.use('/api/students', studentRoutes);
-// app.use('/api/attendance', attendanceRoutes);
 
 // Error handling middleware
 app.use(
@@ -59,7 +57,12 @@ app.use("*", (req, res) => {
   });
 });
 
-app.listen(PORT, () => {
+// Start server with database connection test
+app.listen(PORT, async () => {
   console.log(`🚀 Backend server running on http://localhost:${PORT}`);
   console.log(`📊 Health check: http://localhost:${PORT}/api/health`);
+
+  // Test database connection on startup
+  console.log("🔌 Testing database connection...");
+  await testConnection();
 });
