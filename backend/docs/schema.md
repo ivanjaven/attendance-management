@@ -34,7 +34,7 @@ Stores common user account information and drives RBAC.
 | ------------ | ------------------------------- | -------------------------------------------------------------------- |
 | `auth_id`    | INT                             | Primary key, foreign key to `auth`. Uniquely identifies a user.      |
 | `type`       | ENUM('Teacher','Admin','Staff') | User role, determines access level and links to role-specific table. |
-| `status`     | ENUM('Active','Banned')         | Account status for access control.                                   |
+| `status`     | ENUM('Active','Inactive')       | Account status for access control.                                   |
 | `last_login` | TIMESTAMP                       | Last login time. Nullable.                                           |
 | `deleted_at` | TIMESTAMP                       | Soft delete timestamp. NULL = active, timestamp = deleted.           |
 | `created_at` | TIMESTAMP                       | Record creation time, default CURRENT_TIMESTAMP.                     |
@@ -66,6 +66,25 @@ Stores admin-specific information for high-level system access.
 - Index: `auth_id`, `deleted_at` (for efficient joins and active admin filtering)
 
 **Why**: Manages admin accounts with high-level access (e.g., QR scanning portal). Excludes `last_login`, `type` as they're in `users`. Soft delete preserves administrative history.
+
+## Table: `staff`
+
+Stores staff-specific information for gate operations and scanning duties.
+
+| Field        | Type         | Description                                                      |
+| ------------ | ------------ | ---------------------------------------------------------------- |
+| `auth_id`    | INT          | Primary key, foreign key to `auth`. Uniquely identifies a staff. |
+| `name`       | VARCHAR(100) | Staff member's full name.                                        |
+| `deleted_at` | TIMESTAMP    | Soft delete timestamp. NULL = active, timestamp = deleted.       |
+| `created_at` | TIMESTAMP    | Record creation time, default CURRENT_TIMESTAMP.                 |
+| `updated_at` | TIMESTAMP    | Record update time, default CURRENT_TIMESTAMP.                   |
+
+**Constraints**:
+
+- Foreign key: `auth_id` (one-to-one with `auth.auth_id`)
+- Index: `auth_id`, `deleted_at` (for efficient joins and active staff filtering)
+
+**Why**: Manages staff accounts with scanning permissions for QR code attendance logging. Excludes `last_login`, `type` as they're in `users`. Soft delete preserves employment history.
 
 ## Table: `teachers`
 
@@ -267,6 +286,7 @@ Stores school calendar to filter non-school days.
 - `users(auth_id, type, deleted_at)`: Optimizes RBAC and active user filtering.
 - `teachers(auth_id, deleted_at)`: Optimizes joins with `auth` and active teacher filtering.
 - `admins(auth_id, deleted_at)`: Optimizes joins with `auth` and active admin filtering.
+- `staff(auth_id, deleted_at)`: Optimizes joins with `auth` and active staff filtering.
 - `levels(deleted_at)`: Optimizes active level filtering.
 - `sections(deleted_at)`: Optimizes active section filtering.
 - `specializations(deleted_at)`: Optimizes active specialization filtering.

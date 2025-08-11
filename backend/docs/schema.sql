@@ -66,6 +66,15 @@ CREATE TABLE specializations (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+-- Staff role-specific table
+CREATE TABLE staff (
+    auth_id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+    name VARCHAR(100) NOT NULL,
+    deleted_at TIMESTAMP,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
 -- Teachers role-specific table
 CREATE TABLE teachers (
     auth_id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
@@ -199,6 +208,10 @@ CREATE TRIGGER update_admins_updated_at
 
 CREATE TRIGGER update_teachers_updated_at 
     BEFORE UPDATE ON teachers 
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER update_staff_updated_at 
+    BEFORE UPDATE ON staff 
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 CREATE TRIGGER update_students_updated_at 
