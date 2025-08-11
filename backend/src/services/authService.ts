@@ -136,16 +136,19 @@ export class AuthService {
       if (userError || !userData) {
         return null;
       }
-      const { data: authUser } = await supabaseAdmin.auth.admin.getUserById(
-        authId
-      );
-      if (!authUser.user) {
+
+      // Get auth user data from the current session
+      const {
+        data: { user: authUser },
+      } = await supabase.auth.getUser();
+
+      if (!authUser) {
         return null;
       }
 
       const baseUser = {
         auth_id: authId,
-        email: authUser.user.email!,
+        email: authUser.email!,
         type: userData.type,
         status: userData.status,
         last_login: userData.last_login
@@ -173,7 +176,6 @@ export class AuthService {
       return null;
     }
   }
-
   /**
    * Create role-specific record based on user type
    */

@@ -5,6 +5,12 @@ import morgan from "morgan";
 import dotenv from "dotenv";
 import { testConnection } from "./config/database";
 
+import { authRoutes } from "./routes/auth";
+
+// Debug line - add this temporarily
+console.log("Auth routes type:", typeof authRoutes);
+console.log("Auth routes:", authRoutes);
+
 dotenv.config();
 
 const app = express();
@@ -32,6 +38,9 @@ app.get("/api/health", async (req, res) => {
     database: dbConnected ? "Connected" : "Disconnected",
   });
 });
+
+// Auth routes
+app.use("/api/auth", authRoutes);
 
 // Error handling middleware
 app.use(
