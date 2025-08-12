@@ -1,4 +1,3 @@
-// Student interface
 export interface Student {
   id: number;
   student_id: string;
@@ -14,7 +13,6 @@ export interface Student {
   updated_at: Date;
 }
 
-// Attendance Log interface
 export interface AttendanceLog {
   id: number;
   student_id: number;
@@ -22,16 +20,48 @@ export interface AttendanceLog {
   time_in: string;
   time_out?: string;
   is_late: boolean;
+  late_minutes: number;
   created_at: Date;
   updated_at: Date;
 }
 
-// QR Scan request interface - simplified for automatic detection
+export interface StudentLateTracking {
+  id: number;
+  student_id: number;
+  quarter_id: number;
+  total_late_minutes: number;
+  notification_sent: boolean;
+  last_updated: Date;
+  created_at: Date;
+  updated_at: Date;
+}
+
+export interface Quarter {
+  id: number;
+  quarter_name: string;
+  start_date: Date;
+  end_date: Date;
+  school_start_time: string;
+  created_at: Date;
+  updated_at: Date;
+}
+
+export interface Notification {
+  id: number;
+  student_id: number;
+  teacher_id: string;
+  type: "Alert" | "Reminder";
+  message: string;
+  sent_at: Date;
+  status: "Sent" | "Delivered" | "Read";
+  created_at: Date;
+  updated_at: Date;
+}
+
 export interface QRScanRequest {
   qr_token: string;
 }
 
-// QR Scan response interface
 export interface QRScanResponse {
   success: boolean;
   data?: {
@@ -39,12 +69,14 @@ export interface QRScanResponse {
     attendance_log: AttendanceLog;
     is_late: boolean;
     action: "time_in" | "time_out";
+    late_minutes?: number;
+    total_late_minutes?: number;
+    notification_triggered?: boolean;
   };
   message?: string;
   error?: string;
 }
 
-// API Response interface
 export interface ApiResponse<T = any> {
   success: boolean;
   data?: T;
@@ -58,10 +90,25 @@ export interface AttendanceLogInput {
   attendance_date: Date;
   time_in: string;
   is_late: boolean;
+  late_minutes: number;
 }
 
 export interface AttendanceLogUpdate {
   time_in?: string;
   time_out?: string;
   is_late?: boolean;
+  late_minutes?: number;
+}
+
+export interface StudentLateTrackingInput {
+  student_id: number;
+  quarter_id: number;
+  total_late_minutes: number;
+}
+
+export interface NotificationInput {
+  student_id: number;
+  teacher_id: string;
+  type: "Alert" | "Reminder";
+  message: string;
 }

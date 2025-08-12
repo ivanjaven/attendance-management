@@ -7,7 +7,7 @@ const router = Router();
 
 /**
  * POST /api/attendance/scan
- * Process QR code scan with automatic time-in/time-out detection
+ * Process QR code scan with automatic time-in/time-out detection and late tracking
  */
 router.post(
   "/scan",
@@ -27,15 +27,33 @@ router.post(
 
       const result = await AttendanceService.processQRScan(scanData);
 
+      const responseData: any = {
+        student: result.student,
+        attendance_log: result.attendanceLog,
+        is_late: result.isLate,
+        action: result.action,
+      };
+
+      // Add late tracking info if available
+      if (result.lateMinutes !== undefined) {
+        responseData.late_minutes = result.lateMinutes;
+      }
+      if (result.totalLateMinutes !== undefined) {
+        responseData.total_late_minutes = result.totalLateMinutes;
+      }
+      if (result.notificationTriggered !== undefined) {
+        responseData.notification_triggered = result.notificationTriggered;
+      }
+
+      let message = `${result.action.replace("_", " ")} processed successfully`;
+      if (result.notificationTriggered) {
+        message += ` - Late threshold notification sent`;
+      }
+
       res.status(200).json({
         success: true,
-        data: {
-          student: result.student,
-          attendance_log: result.attendanceLog,
-          is_late: result.isLate,
-          action: result.action,
-        },
-        message: `${result.action.replace("_", " ")} processed successfully`,
+        data: responseData,
+        message,
       });
     } catch (error: any) {
       console.error("QR scan error:", error);
