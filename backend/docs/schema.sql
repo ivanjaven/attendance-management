@@ -35,6 +35,29 @@ CREATE TABLE admins (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+-- Staff role-specific table
+CREATE TABLE staff (
+    auth_id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+    name VARCHAR(100) NOT NULL,
+    deleted_at TIMESTAMP,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Teachers role-specific table
+CREATE TABLE teachers (
+    auth_id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+    first_name VARCHAR(50) NOT NULL,
+    last_name VARCHAR(50) NOT NULL,
+    middle_name VARCHAR(50),
+    advisory_level_id INTEGER REFERENCES levels(id),
+    advisory_specialization_id INTEGER REFERENCES specializations(id),
+    advisory_section_id INTEGER REFERENCES sections(id),
+    deleted_at TIMESTAMP,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
 -- ============================================================================
 -- ACADEMIC STRUCTURE TABLES
 -- ============================================================================
@@ -66,24 +89,13 @@ CREATE TABLE specializations (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- Staff role-specific table
-CREATE TABLE staff (
-    auth_id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
-    name VARCHAR(100) NOT NULL,
-    deleted_at TIMESTAMP,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-
--- Teachers role-specific table
-CREATE TABLE teachers (
-    auth_id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
-    first_name VARCHAR(50) NOT NULL,
-    last_name VARCHAR(50) NOT NULL,
-    middle_name VARCHAR(50),
-    advisory_level_id INTEGER REFERENCES levels(id),
-    advisory_specialization_id INTEGER REFERENCES specializations(id),
-    advisory_section_id INTEGER REFERENCES sections(id),
+-- Quarters table - defines academic periods for late calculations
+CREATE TABLE quarters (
+    id SERIAL PRIMARY KEY,
+    quarter_name VARCHAR(20) NOT NULL,
+    start_date DATE NOT NULL,
+    end_date DATE NOT NULL,
+    school_start_time TIME NOT NULL,
     deleted_at TIMESTAMP,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -110,18 +122,6 @@ CREATE TABLE students (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- Quarters table - defines academic periods for late calculations
-CREATE TABLE quarters (
-    id SERIAL PRIMARY KEY,
-    quarter_name VARCHAR(20) NOT NULL,
-    start_date DATE NOT NULL,
-    end_date DATE NOT NULL,
-    school_start_time TIME NOT NULL,
-    deleted_at TIMESTAMP,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-
 -- Attendance log table - core table for time tracking and analytics
 CREATE TABLE attendance_log (
     id SERIAL PRIMARY KEY,
@@ -130,9 +130,25 @@ CREATE TABLE attendance_log (
     time_in TIME NOT NULL,
     time_out TIME,
     is_late BOOLEAN DEFAULT FALSE,
+    late_minutes INTEGER DEFAULT 0,
     deleted_at TIMESTAMP,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Student late tracking table - stores cumulative late minutes per quarter
+CREATE TABLE student_late_tracking (
+    id SERIAL PRIMARY KEY,
+    student_id INTEGER REFERENCES students(id) ON DELETE CASCADE,
+    quarter_id INTEGER REFERENCES quarters(id) ON DELETE CASCADE,
+    total_late_minutes INTEGER DEFAULT 0,
+    notification_sent BOOLEAN DEFAULT FALSE,
+    last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    
+    -- Ensure one record per student per quarter
+    UNIQUE(student_id, quarter_id)
 );
 
 -- Notifications table - stores alerts for teachers
@@ -168,6 +184,11 @@ CREATE INDEX idx_students_qr_token ON students(qr_token) WHERE deleted_at IS NUL
 
 -- Attendance analytics optimization
 CREATE INDEX idx_attendance_log_student_date ON attendance_log(student_id, attendance_date) WHERE deleted_at IS NULL;
+CREATE INDEX idx_attendance_log_late ON attendance_log(student_id, late_minutes) WHERE late_minutes > 0;
+
+-- Late tracking optimization
+CREATE INDEX idx_student_late_tracking_lookup ON student_late_tracking(student_id, quarter_id);
+CREATE INDEX idx_quarters_date_range ON quarters(start_date, end_date) WHERE deleted_at IS NULL;
 
 -- Notification queries optimization
 CREATE INDEX idx_notifications_teacher ON notifications(teacher_id);
@@ -238,6 +259,10 @@ CREATE TRIGGER update_attendance_log_updated_at
     BEFORE UPDATE ON attendance_log 
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
+CREATE TRIGGER update_student_late_tracking_updated_at 
+    BEFORE UPDATE ON student_late_tracking 
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
 CREATE TRIGGER update_notifications_updated_at 
     BEFORE UPDATE ON notifications 
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
@@ -265,4 +290,3 @@ INSERT INTO specializations (specialization_name) VALUES
 -- Insert sample quarter
 INSERT INTO quarters (quarter_name, start_date, end_date, school_start_time) VALUES 
 ('Q1 2024-2025', '2024-08-15', '2024-10-31', '08:00:00');
-

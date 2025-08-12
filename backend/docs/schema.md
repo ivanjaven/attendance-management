@@ -194,6 +194,27 @@ Stores student academic tracks (e.g., STEM, ABM).
 
 **Why**: Filters analytics by track. `VARCHAR(50)` covers most specialization names. Soft delete prevents foreign key violations when specializations are referenced by students.
 
+## Table: `quarters`
+
+Defines academic quarters for analytics and late calculations.
+
+| Field               | Type        | Description                                                |
+| ------------------- | ----------- | ---------------------------------------------------------- |
+| `id`                | INT         | Primary key, auto-incremented.                             |
+| `quarter_name`      | VARCHAR(20) | Quarter name (e.g., "Q1").                                 |
+| `start_date`        | DATE        | Quarter start date.                                        |
+| `end_date`          | DATE        | Quarter end date.                                          |
+| `school_start_time` | TIME        | Official class start time for late calculations.           |
+| `deleted_at`        | TIMESTAMP   | Soft delete timestamp. NULL = active, timestamp = deleted. |
+| `created_at`        | TIMESTAMP   | Record creation time, default CURRENT_TIMESTAMP.           |
+| `updated_at`        | TIMESTAMP   | Record update time, default CURRENT_TIMESTAMP.             |
+
+**Constraints**:
+
+- Index: `deleted_at` (for active quarter filtering)
+
+**Why**: `school_start_time` enables automatic late detection. Soft delete preserves academic calendar history for reporting and analytics.
+
 ## Table: `attendance_log`
 
 Stores student attendance records for time tracking and analytics.
@@ -206,6 +227,7 @@ Stores student attendance records for time tracking and analytics.
 | `time_in`         | TIME      | Time student clocked in.                                   |
 | `time_out`        | TIME      | Time student clocked out. Nullable.                        |
 | `is_late`         | BOOLEAN   | True if `time_in` exceeds `quarters.school_start_time`.    |
+| `late_minutes`    | INT       | Number of minutes late. Calculated during QR scan.         |
 | `deleted_at`      | TIMESTAMP | Soft delete timestamp. NULL = active, timestamp = deleted. |
 | `created_at`      | TIMESTAMP | Record creation time, default CURRENT_TIMESTAMP.           |
 | `updated_at`      | TIMESTAMP | Record update time, default CURRENT_TIMESTAMP.             |
@@ -214,8 +236,32 @@ Stores student attendance records for time tracking and analytics.
 
 - Foreign key: `student_id`
 - Index: `student_id`, `attendance_date`, `deleted_at` (for analytics queries and active record filtering)
+- Index: `student_id`, `late_minutes` (for late tracking optimization)
 
-**Why**: Core table for time logs, late calculations, and absence detection. Soft delete preserves attendance history for audit trails and compliance requirements.
+**Why**: Core table for time logs, late calculations, and absence detection. `late_minutes` provides pre-calculated values for performance optimization. Soft delete preserves attendance history for audit trails and compliance requirements.
+
+## Table: `student_late_tracking`
+
+Tracks cumulative late minutes per student per quarter for efficient threshold monitoring.
+
+| Field                | Type      | Description                                      |
+| -------------------- | --------- | ------------------------------------------------ |
+| `id`                 | INT       | Primary key, auto-incremented.                   |
+| `student_id`         | INT       | Foreign key to `students`.                       |
+| `quarter_id`         | INT       | Foreign key to `quarters`.                       |
+| `total_late_minutes` | INT       | Cumulative late minutes for the quarter.         |
+| `notification_sent`  | BOOLEAN   | True if 70-minute notification has been sent.    |
+| `last_updated`       | TIMESTAMP | Last time the record was updated.                |
+| `created_at`         | TIMESTAMP | Record creation time, default CURRENT_TIMESTAMP. |
+| `updated_at`         | TIMESTAMP | Record update time, default CURRENT_TIMESTAMP.   |
+
+**Constraints**:
+
+- Foreign keys: `student_id`, `quarter_id`
+- UNIQUE: `(student_id, quarter_id)` (one record per student per quarter)
+- Index: `student_id`, `quarter_id` (for fast lookups during QR scanning)
+
+**Why**: Optimizes late minute calculations by maintaining running totals instead of recalculating from attendance_log. Uses lazy creation pattern - records only created when students are late. Enables instant threshold checking during QR scans without performance impact.
 
 ## Table: `notifications`
 
@@ -242,27 +288,6 @@ Stores notifications for teachers (e.g., 3+ absences).
 
 **Why**: Supports automated notifications for absences. No soft delete needed - notifications have natural lifecycle (sent, delivered, read) and can be hard deleted after retention period.
 
-## Table: `quarters`
-
-Defines academic quarters for analytics and late calculations.
-
-| Field               | Type        | Description                                                |
-| ------------------- | ----------- | ---------------------------------------------------------- |
-| `id`                | INT         | Primary key, auto-incremented.                             |
-| `quarter_name`      | VARCHAR(20) | Quarter name (e.g., "Q1").                                 |
-| `start_date`        | DATE        | Quarter start date.                                        |
-| `end_date`          | DATE        | Quarter end date.                                          |
-| `school_start_time` | TIME        | Official class start time for late calculations.           |
-| `deleted_at`        | TIMESTAMP   | Soft delete timestamp. NULL = active, timestamp = deleted. |
-| `created_at`        | TIMESTAMP   | Record creation time, default CURRENT_TIMESTAMP.           |
-| `updated_at`        | TIMESTAMP   | Record update time, default CURRENT_TIMESTAMP.             |
-
-**Constraints**:
-
-- Index: `deleted_at` (for active quarter filtering)
-
-**Why**: `school_start_time` enables automatic late detection. Soft delete preserves academic calendar history for reporting and analytics.
-
 ## Table: `school_calendar`
 
 Stores school calendar to filter non-school days.
@@ -282,6 +307,9 @@ Stores school calendar to filter non-school days.
 
 - `students(student_id, qr_token, deleted_at)`: Speeds up QR scanning and active student lookups.
 - `attendance_log(student_id, attendance_date, deleted_at)`: Optimizes analytics queries for active records.
+- `attendance_log(student_id, late_minutes)`: Optimizes late tracking queries.
+- `student_late_tracking(student_id, quarter_id)`: Enables instant late threshold lookups.
+- `quarters(start_date, end_date)`: Optimizes active quarter detection.
 - `notifications(teacher_id)`: Improves notification retrieval.
 - `users(auth_id, type, deleted_at)`: Optimizes RBAC and active user filtering.
 - `teachers(auth_id, deleted_at)`: Optimizes joins with `auth` and active teacher filtering.
