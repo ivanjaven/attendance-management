@@ -6,10 +6,7 @@ import dotenv from "dotenv";
 import { testConnection } from "./config/database";
 
 import { authRoutes } from "./routes/auth";
-
-// Debug line - add this temporarily
-console.log("Auth routes type:", typeof authRoutes);
-console.log("Auth routes:", authRoutes);
+import { attendanceRoutes } from "./routes/attendance";
 
 dotenv.config();
 
@@ -42,6 +39,9 @@ app.get("/api/health", async (req, res) => {
 // Auth routes
 app.use("/api/auth", authRoutes);
 
+// Attendance routes
+app.use("/api/attendance", attendanceRoutes);
+
 // Error handling middleware
 app.use(
   (
@@ -70,8 +70,6 @@ app.use("*", (req, res) => {
 app.listen(PORT, async () => {
   console.log(`🚀 Backend server running on http://localhost:${PORT}`);
   console.log(`📊 Health check: http://localhost:${PORT}/api/health`);
-
-  // Test database connection on startup
   console.log("🔌 Testing database connection...");
   await testConnection();
 });
