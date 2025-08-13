@@ -8,10 +8,7 @@
         QR Code-based attendance management for schools
       </p>
       <div class="space-y-4">
-        <router-link
-          to="/login"
-          class="btn-primary w-full text-center block"
-        >
+        <router-link to="/login" class="btn-primary w-full text-center block">
           Login
         </router-link>
         <router-link

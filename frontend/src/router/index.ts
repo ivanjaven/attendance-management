@@ -1,20 +1,49 @@
+import { createRouter, createWebHistory } from "vue-router";
 import type { RouteRecordRaw } from "vue-router";
+import { useAuthStore } from "@/stores/auth";
 
-export const routes: RouteRecordRaw[] = [
+// Direct imports
+import LoginView from "@/views/LoginView.vue";
+import DashboardView from "@/views/DashboardView.vue";
+
+const routes: RouteRecordRaw[] = [
   {
     path: "/",
-    name: "Home",
-    component: () => import("@/views/HomeView.vue"),
+    redirect: "/login",
   },
   {
     path: "/login",
-    name: "Login",
-    component: () => import("@/views/auth/LoginView.vue"),
+    name: "login",
+    component: LoginView,
+    meta: { requiresGuest: true },
   },
   {
     path: "/dashboard",
-    name: "Dashboard",
-    component: () => import("@/views/DashboardView.vue"),
-    // meta: { requiresAuth: true }
+    name: "dashboard",
+    component: DashboardView,
+    meta: { requiresAuth: true },
   },
 ];
+
+const router = createRouter({
+  history: createWebHistory(),
+  routes,
+});
+
+// Navigation guards
+router.beforeEach((to, from, next) => {
+  const authStore = useAuthStore();
+
+  // Initialize auth state
+  authStore.initAuth();
+
+  if (to.meta.requiresAuth && !authStore.isAuthenticated) {
+    next("/login");
+  } else if (to.meta.requiresGuest && authStore.isAuthenticated) {
+    next("/dashboard");
+  } else {
+    next();
+  }
+});
+
+export default router;

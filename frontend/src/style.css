@@ -1,32 +1,140 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss/base";
+@import "tailwindcss/components";
+@import "tailwindcss/utilities";
 
+/* Import Inter font for clean UI */
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap");
+
+/* Base styles */
 @layer base {
-  html,
-  body {
-    @apply h-full;
+  * {
+    box-sizing: border-box;
+  }
+
+  html {
+    font-family: "Inter", ui-sans-serif, system-ui, sans-serif;
   }
 
   body {
-    @apply bg-gray-50 text-gray-900 font-sans;
+    @apply bg-gray-50 text-gray-900 antialiased;
   }
 }
 
+/* Component styles */
 @layer components {
+  /* Card component */
+  .card {
+    @apply bg-white rounded-2xl shadow-card p-8 border border-gray-100 backdrop-blur-sm;
+  }
+
+  .card-compact {
+    @apply bg-white rounded-xl shadow-soft p-6 border border-gray-100 hover:shadow-card transition-shadow duration-200;
+  }
+
+  /* Button components */
+  .btn {
+    @apply px-6 py-3 rounded-lg font-medium text-sm transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 inline-flex items-center justify-center;
+  }
+
   .btn-primary {
-    @apply bg-primary-600 hover:bg-primary-700 text-white font-medium py-2 px-4 rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2;
+    @apply btn bg-gradient-to-r from-primary-600 to-primary-700 text-white hover:from-primary-700 hover:to-primary-800 focus:ring-primary-500 shadow-lg hover:shadow-xl transform hover:scale-[1.02];
   }
 
   .btn-secondary {
-    @apply bg-gray-200 hover:bg-gray-300 text-gray-900 font-medium py-2 px-4 rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2;
+    @apply btn bg-gradient-to-r from-secondary-500 to-secondary-600 text-white hover:from-secondary-600 hover:to-secondary-700 focus:ring-secondary-400 shadow-lg hover:shadow-xl transform hover:scale-[1.02];
   }
 
-  .input-field {
-    @apply block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500;
+  .btn-outline {
+    @apply btn bg-white text-gray-700 border border-gray-300 hover:bg-gray-50 focus:ring-gray-500 shadow-sm hover:shadow-md;
   }
 
-  .card {
-    @apply bg-white rounded-lg shadow-sm border border-gray-200 p-6;
+  /* Input components */
+  .form-input {
+    @apply w-full px-4 py-3 border border-gray-300 rounded-lg text-gray-900 placeholder-gray-400 
+           focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent 
+           transition-all duration-200 bg-white;
   }
+
+  .form-input:focus {
+    @apply shadow-soft;
+  }
+
+  .form-input.error {
+    @apply border-red-300 focus:ring-red-500;
+  }
+
+  /* Form components */
+  .form-group {
+    @apply space-y-2;
+  }
+
+  .form-label {
+    @apply block text-sm font-medium text-gray-700;
+  }
+
+  .form-error {
+    @apply text-sm text-red-600 mt-1;
+  }
+
+  /* Logo styles */
+  .logo-circle {
+    @apply w-16 h-16 bg-primary-600 rounded-full flex items-center justify-center mx-auto mb-6 shadow-lg;
+  }
+
+  .logo-inner {
+    @apply w-8 h-8 bg-white rounded-full shadow-inner;
+  }
+}
+
+/* Utility classes */
+@layer utilities {
+  .text-gradient {
+    @apply bg-gradient-to-r from-primary-600 to-secondary-500 bg-clip-text text-transparent;
+  }
+
+  /* Animation classes */
+  .animate-blob {
+    animation: blob 7s infinite;
+  }
+
+  .animation-delay-2000 {
+    animation-delay: 2s;
+  }
+
+  .animation-delay-4000 {
+    animation-delay: 4s;
+  }
+}
+
+/* Animations */
+@keyframes blob {
+  0% {
+    transform: translate(0px, 0px) scale(1);
+  }
+  33% {
+    transform: translate(30px, -50px) scale(1.1);
+  }
+  66% {
+    transform: translate(-20px, 20px) scale(0.9);
+  }
+  100% {
+    transform: translate(0px, 0px) scale(1);
+  }
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+}
+
+::-webkit-scrollbar-track {
+  @apply bg-gray-100;
+}
+
+::-webkit-scrollbar-thumb {
+  @apply bg-gray-300 rounded-full;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  @apply bg-gray-400;
 }

@@ -1,20 +1,13 @@
 import { createApp } from "vue";
 import { createPinia } from "pinia";
-import { createRouter, createWebHistory } from "vue-router";
 import App from "./App.vue";
-import "./style.css";
-
-// Import your routes (we'll create this next)
-import { routes } from "./router";
-
-const router = createRouter({
-  history: createWebHistory(),
-  routes,
-});
+import router from "./router";
+import "./style.css"; // 👈 This line is crucial!
 
 const app = createApp(App);
+const pinia = createPinia();
 
-app.use(createPinia());
+app.use(pinia);
 app.use(router);
 
 app.mount("#app");
