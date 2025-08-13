@@ -2,9 +2,9 @@ import { createRouter, createWebHistory } from "vue-router";
 import type { RouteRecordRaw } from "vue-router";
 import { useAuthStore } from "@/stores/auth";
 
-// Direct imports
 import LoginView from "@/views/LoginView.vue";
 import DashboardView from "@/views/DashboardView.vue";
+import QRScannerView from "@/views/QRScannerView.vue";
 
 const routes: RouteRecordRaw[] = [
   {
@@ -23,6 +23,12 @@ const routes: RouteRecordRaw[] = [
     component: DashboardView,
     meta: { requiresAuth: true },
   },
+  {
+    path: "/qr-scanner",
+    name: "qr-scanner",
+    component: QRScannerView,
+    meta: { requiresAuth: true },
+  },
 ];
 
 const router = createRouter({
@@ -30,11 +36,8 @@ const router = createRouter({
   routes,
 });
 
-// Navigation guards
 router.beforeEach((to, from, next) => {
   const authStore = useAuthStore();
-
-  // Initialize auth state
   authStore.initAuth();
 
   if (to.meta.requiresAuth && !authStore.isAuthenticated) {

@@ -11,9 +11,6 @@ declare global {
   }
 }
 
-/**
- * Middleware to authenticate requests using Supabase JWT
- */
 export const authenticateToken = async (
   req: Request,
   res: Response,
@@ -31,7 +28,6 @@ export const authenticateToken = async (
       return;
     }
 
-    // Verify token with Supabase
     const {
       data: { user },
       error,
@@ -45,7 +41,6 @@ export const authenticateToken = async (
       return;
     }
 
-    // Get user with role data
     const userData = await AuthService.getCurrentUser();
 
     if (!userData) {
@@ -64,11 +59,9 @@ export const authenticateToken = async (
       return;
     }
 
-    // Attach user to request
     req.user = userData;
     next();
   } catch (error) {
-    console.error("Auth middleware error:", error);
     res.status(500).json({
       success: false,
       error: "Authentication failed",
@@ -76,9 +69,6 @@ export const authenticateToken = async (
   }
 };
 
-/**
- * Middleware to check if user has required role(s)
- */
 export const requireRole = (allowedRoles: UserRole[]) => {
   return (req: Request, res: Response, next: NextFunction): void => {
     if (!req.user) {
@@ -101,10 +91,12 @@ export const requireRole = (allowedRoles: UserRole[]) => {
   };
 };
 
-/**
- * Middleware for routes
- */
 export const requireAdmin = requireRole(["Admin"]);
 export const requireTeacher = requireRole(["Teacher"]);
 export const requireStaff = requireRole(["Staff"]);
 export const requireTeacherOrAdmin = requireRole(["Teacher", "Admin"]);
+export const requireTeacherOrAdminOrStaff = requireRole([
+  "Teacher",
+  "Admin",
+  "Staff",
+]);

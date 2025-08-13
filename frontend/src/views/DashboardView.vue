@@ -96,7 +96,9 @@
             <p class="text-gray-600 mb-6">
               Scan student QR codes to log attendance
             </p>
-            <button class="btn-primary">Start QR Scanner</button>
+            <router-link to="/qr-scanner" class="btn-primary">
+              Start QR Scanner
+            </router-link>
           </div>
 
           <div class="card">
