@@ -39,15 +39,18 @@ export interface QRScanResponse {
 }
 
 export class AttendanceService {
-  static async scanQR(qrToken: string): Promise<QRScanResponse> {
+  static async scanQR(scannedQRData: string): Promise<QRScanResponse> {
     try {
+      // Send the raw scanned data to backend for validation and processing
       const response = await api.post<QRScanResponse>("/attendance/scan", {
-        qr_token: qrToken,
+        qr_token: scannedQRData,
       });
       return response.data;
     } catch (error: any) {
       if (error.response?.status === 400) {
-        throw new Error(error.response.data?.error || "Invalid QR code");
+        throw new Error(
+          error.response.data?.error || "Invalid or tampered QR code"
+        );
       } else if (error.response?.status >= 500) {
         throw new Error("Server error. Please try again later.");
       } else {

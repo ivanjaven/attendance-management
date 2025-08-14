@@ -1,4 +1,5 @@
 import { supabase } from "../config/database";
+import { QRSecurityService } from "./qrSecurityService";
 import {
   QRScanRequest,
   Student,
@@ -19,7 +20,18 @@ export class AttendanceService {
     notificationTriggered?: boolean;
   }> {
     try {
-      const student = await this.findStudentByQRToken(scanData.qr_token);
+      // Validate and decode the QR code first
+      const originalQRToken = await QRSecurityService.validateAndDecodeQRCode(
+        scanData.qr_token
+      );
+
+      if (!originalQRToken) {
+        throw new Error(
+          "Invalid or tampered QR code. Please contact administrator."
+        );
+      }
+
+      const student = await this.findStudentByQRToken(originalQRToken);
       if (!student) {
         throw new Error("Invalid QR code. Student not found.");
       }
@@ -34,7 +46,14 @@ export class AttendanceService {
       } else {
         throw new Error("Student has already completed attendance for today");
       }
-    } catch (error) {
+    } catch (error: unknown) {
+      const errorMessage =
+        error instanceof Error ? error.message : "Unknown error";
+      console.error("QR Scan Error:", {
+        error: errorMessage,
+        timestamp: new Date().toISOString(),
+        qr_data_length: scanData.qr_token?.length || 0,
+      });
       throw error;
     }
   }

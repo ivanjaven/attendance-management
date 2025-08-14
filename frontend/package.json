@@ -14,11 +14,13 @@
     "@heroicons/vue": "^2.2.0",
     "axios": "^1.6.2",
     "pinia": "^2.1.7",
+    "qrcode": "^1.5.4",
     "shared": "*",
     "vue": "^3.3.13",
     "vue-router": "^4.2.5"
   },
   "devDependencies": {
+    "@types/qrcode": "^1.5.5",
     "@vitejs/plugin-vue": "^4.5.2",
     "@vue/tsconfig": "^0.5.1",
     "autoprefixer": "^10.4.21",
