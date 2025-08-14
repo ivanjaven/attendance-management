@@ -7,6 +7,7 @@ import { testConnection } from "./config/database";
 
 import { authRoutes } from "./routes/auth";
 import { attendanceRoutes } from "./routes/attendance";
+import { adminRoutes } from "./routes/admin";
 
 dotenv.config();
 
@@ -41,6 +42,9 @@ app.use("/api/auth", authRoutes);
 
 // Attendance routes
 app.use("/api/attendance", attendanceRoutes);
+
+// Admin routes
+app.use("/api/admin", adminRoutes);
 
 // Error handling middleware
 app.use(

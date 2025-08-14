@@ -29,6 +29,15 @@ const routes: RouteRecordRaw[] = [
     component: QRScannerView,
     meta: { requiresAuth: true },
   },
+  {
+    path: "/admin",
+    name: "admin",
+    redirect: "/dashboard",
+    meta: { requiresAuth: true, requiresAdmin: true },
+    children: [
+      // Future admin-specific routes can go here
+    ],
+  },
 ];
 
 const router = createRouter({
@@ -40,13 +49,25 @@ router.beforeEach((to, from, next) => {
   const authStore = useAuthStore();
   authStore.initAuth();
 
+  // Check authentication
   if (to.meta.requiresAuth && !authStore.isAuthenticated) {
     next("/login");
-  } else if (to.meta.requiresGuest && authStore.isAuthenticated) {
-    next("/dashboard");
-  } else {
-    next();
+    return;
   }
+
+  // Check guest routes
+  if (to.meta.requiresGuest && authStore.isAuthenticated) {
+    next("/dashboard");
+    return;
+  }
+
+  // Check admin access
+  if (to.meta.requiresAdmin && !authStore.isAdmin) {
+    next("/dashboard"); // Redirect non-admins to dashboard
+    return;
+  }
+
+  next();
 });
 
 export default router;

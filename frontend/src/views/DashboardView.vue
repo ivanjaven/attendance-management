@@ -1,51 +1,27 @@
 <template>
   <div class="min-h-screen bg-gray-50">
-    <!-- Header with logout -->
-    <header class="bg-white shadow-soft border-b border-gray-200">
+    <!-- Header -->
+    <header class="bg-white shadow">
       <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div class="flex justify-between items-center py-4">
-          <div class="flex items-center space-x-4">
-            <div class="logo-circle !w-10 !h-10 !mb-0">
-              <div class="logo-inner !w-4 !h-4"></div>
-            </div>
-            <h1 class="text-xl font-semibold text-gray-900">
-              Attendance System
+        <div class="flex justify-between items-center py-6">
+          <div>
+            <h1 class="text-3xl font-bold text-gray-900">
+              {{ isAdmin ? "Admin Dashboard" : "Dashboard" }}
             </h1>
+            <p class="text-gray-600">Welcome back, {{ userDisplayName }}</p>
           </div>
-
           <div class="flex items-center space-x-4">
-            <!-- User info -->
-            <div v-if="user" class="text-sm text-gray-600">
-              Welcome, {{ user.first_name || user.email }}
-            </div>
-
-            <!-- Logout button -->
+            <span
+              class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium"
+              :class="getRoleBadgeClass()"
+            >
+              {{ user?.type }}
+            </span>
             <button
               @click="handleLogout"
               :disabled="isLoading"
-              class="btn-outline text-red-600 border-red-300 hover:bg-red-50 hover:border-red-400 focus:ring-red-500"
-              :class="{ 'opacity-50 cursor-not-allowed': isLoading }"
+              class="btn-secondary"
             >
-              <svg
-                v-if="isLoading"
-                class="animate-spin h-4 w-4 mr-2"
-                fill="none"
-                viewBox="0 0 24 24"
-              >
-                <circle
-                  class="opacity-25"
-                  cx="12"
-                  cy="12"
-                  r="10"
-                  stroke="currentColor"
-                  stroke-width="4"
-                ></circle>
-                <path
-                  class="opacity-75"
-                  fill="currentColor"
-                  d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                ></path>
-              </svg>
               {{ isLoading ? "Logging out..." : "Logout" }}
             </button>
           </div>
@@ -56,11 +32,6 @@
     <!-- Main content -->
     <main class="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
       <div class="px-4 py-6 sm:px-0">
-        <div class="mb-8">
-          <h2 class="text-3xl font-bold text-gray-900 mb-2">Dashboard</h2>
-          <p class="text-gray-600">Manage your attendance system</p>
-        </div>
-
         <!-- Dashboard Cards -->
         <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
           <!-- Quick Stats -->
@@ -90,25 +61,66 @@
         </div>
 
         <!-- Action Cards -->
-        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
           <div class="card">
             <h3 class="text-xl font-semibold text-gray-900 mb-4">QR Scanner</h3>
             <p class="text-gray-600 mb-6">
               Scan student QR codes to log attendance
             </p>
             <router-link to="/qr-scanner" class="btn-primary">
+              <QrCodeIcon class="h-5 w-5 mr-2 inline" />
               Start QR Scanner
             </router-link>
           </div>
 
-          <div class="card">
+          <!-- Only show for Teachers -->
+          <div v-if="isTeacher" class="card">
             <h3 class="text-xl font-semibold text-gray-900 mb-4">
-              Attendance Reports
+              My Advisory Class
             </h3>
             <p class="text-gray-600 mb-6">
-              View detailed attendance analytics and reports
+              View attendance and manage your advisory students
             </p>
-            <button class="btn-secondary">View Reports</button>
+            <button class="btn-secondary">
+              <UsersIcon class="h-5 w-5 mr-2 inline" />
+              View My Class
+            </button>
+          </div>
+
+          <!-- Only show for Staff -->
+          <div v-if="isStaff" class="card">
+            <h3 class="text-xl font-semibold text-gray-900 mb-4">
+              Gate Operations
+            </h3>
+            <p class="text-gray-600 mb-6">
+              Monitor student entry and exit activities
+            </p>
+            <button class="btn-secondary">
+              <ClockIcon class="h-5 w-5 mr-2 inline" />
+              View Activities
+            </button>
+          </div>
+        </div>
+
+        <!-- Admin-only QR Generator Section -->
+        <div v-if="isAdmin" class="mb-8">
+          <div class="card">
+            <div class="flex items-center mb-6">
+              <div
+                class="flex items-center justify-center w-12 h-12 bg-primary-100 rounded-lg"
+              >
+                <QrCodeIcon class="h-6 w-6 text-primary-600" />
+              </div>
+              <div class="ml-4">
+                <h3 class="text-xl font-semibold text-gray-900">
+                  QR Code Generator
+                </h3>
+                <p class="text-gray-600">
+                  Generate and manage student ID QR codes
+                </p>
+              </div>
+            </div>
+            <QRGenerator />
           </div>
         </div>
       </div>
@@ -120,6 +132,8 @@
 import { computed } from "vue";
 import { useRouter } from "vue-router";
 import { useAuthStore } from "@/stores/auth";
+import QRGenerator from "@/components/admin/QRGenerator.vue";
+import { QrCodeIcon, UsersIcon, ClockIcon } from "@heroicons/vue/24/outline";
 
 const router = useRouter();
 const authStore = useAuthStore();
@@ -127,15 +141,32 @@ const authStore = useAuthStore();
 // Computed
 const user = computed(() => authStore.user);
 const isLoading = computed(() => authStore.isLoading);
+const isAdmin = computed(() => authStore.isAdmin);
+const isTeacher = computed(() => authStore.isTeacher);
+const isStaff = computed(() => authStore.isStaff);
+const userDisplayName = computed(() => authStore.userDisplayName);
 
 // Methods
+const getRoleBadgeClass = () => {
+  const type = user.value?.type;
+  switch (type) {
+    case "Admin":
+      return "bg-red-100 text-red-800";
+    case "Teacher":
+      return "bg-blue-100 text-blue-800";
+    case "Staff":
+      return "bg-green-100 text-green-800";
+    default:
+      return "bg-gray-100 text-gray-800";
+  }
+};
+
 const handleLogout = async () => {
   try {
     await authStore.logout();
     router.push("/login");
   } catch (error) {
     console.error("Logout error:", error);
-    // Force logout even if API call fails
     router.push("/login");
   }
 };

@@ -1,12 +1,7 @@
 import axios from "axios";
 
-// Simple environment configuration that works everywhere
-const API_BASE_URL = "http://localhost:3001/api";
-
-// Create axios instance
 const api = axios.create({
-  baseURL: API_BASE_URL,
-  timeout: 10000,
+  baseURL: import.meta.env.VITE_API_URL || "http://localhost:3001/api",
   headers: {
     "Content-Type": "application/json",
   },
@@ -31,7 +26,7 @@ api.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response?.status === 401) {
-      // Handle unauthorized access
+      // Token expired or invalid
       localStorage.removeItem("auth_token");
       localStorage.removeItem("user");
       window.location.href = "/login";

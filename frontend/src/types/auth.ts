@@ -4,13 +4,18 @@ export interface LoginCredentials {
 }
 
 export interface User {
-  id: string;
+  auth_id: string;
   email: string;
-  first_name: string;
-  last_name: string;
-  role: "admin" | "teacher" | "student";
-  created_at: string;
-  updated_at: string;
+  type: "Teacher" | "Admin" | "Staff";
+  status: "Active" | "Inactive";
+  last_login?: Date;
+  created_at: Date;
+  updated_at: Date;
+  // Role-specific fields
+  name?: string; // for Admin/Staff
+  first_name?: string; // for Teacher
+  last_name?: string; // for Teacher
+  middle_name?: string; // for Teacher
 }
 
 export interface AuthResponse {

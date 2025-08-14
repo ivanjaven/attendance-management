@@ -1,13 +1,11 @@
 <template>
   <div id="app" class="min-h-screen bg-gray-50">
-    <router-view />
+    <ErrorBoundary>
+      <router-view />
+    </ErrorBoundary>
   </div>
 </template>
 
 <script setup lang="ts">
-// App setup logic will go here
+import ErrorBoundary from "@/components/common/ErrorBoundary.vue";
 </script>
-
-<style scoped>
-/* Component-specific styles can go here */
-</style>
