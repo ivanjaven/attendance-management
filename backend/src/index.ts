@@ -8,8 +8,15 @@ import { testConnection } from "./config/database";
 import { authRoutes } from "./routes/auth";
 import { attendanceRoutes } from "./routes/attendance";
 import { adminRoutes } from "./routes/admin";
+import { dashboardRoutes } from "./routes/dashboard";
 
+// Load environment variables FIRST
 dotenv.config();
+
+// Set timezone from environment variable
+if (process.env.TZ) {
+  process.env.TZ = process.env.TZ;
+}
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -32,19 +39,19 @@ app.get("/api/health", async (req, res) => {
   res.json({
     status: "OK",
     timestamp: new Date().toISOString(),
+    localTime: new Date().toLocaleString("en-US", {
+      timeZone: process.env.TZ || "UTC",
+    }),
+    timezone: process.env.TZ || "UTC",
     service: "attendance-system-api",
     database: dbConnected ? "Connected" : "Disconnected",
   });
 });
 
-// Auth routes
 app.use("/api/auth", authRoutes);
-
-// Attendance routes
 app.use("/api/attendance", attendanceRoutes);
-
-// Admin routes
 app.use("/api/admin", adminRoutes);
+app.use("/api/dashboard", dashboardRoutes);
 
 // Error handling middleware
 app.use(
@@ -62,7 +69,6 @@ app.use(
   }
 );
 
-// 404 handler
 app.use("*", (req, res) => {
   res.status(404).json({
     success: false,
