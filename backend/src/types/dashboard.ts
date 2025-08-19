@@ -83,3 +83,67 @@ export interface AttendanceWithStudent {
     middle_name?: string;
   };
 }
+
+export interface SchoolAttendanceStats {
+  total_students: number;
+  present_today: number;
+  absent_today: number;
+  late_today: number;
+  on_time_today: number;
+  attendance_percentage: number;
+  late_percentage: number;
+}
+
+export interface SchoolStudentsStats {
+  students: SchoolStudentRecord[];
+  pagination: {
+    current_page: number;
+    total_pages: number;
+    total_records: number;
+    per_page: number;
+  };
+  summary: {
+    total_students: number;
+    by_level: Array<{ level: number; count: number }>;
+    by_specialization: Array<{ specialization: string; count: number }>;
+    by_section: Array<{ section: string; count: number }>;
+  };
+}
+
+export interface SchoolStudentRecord {
+  id: number;
+  student_id: string;
+  full_name: string;
+  level: number;
+  specialization: string;
+  section: string;
+  adviser_name: string;
+  attendance_summary: {
+    present_days: number;
+    late_days: number;
+    absent_days: number;
+    total_late_minutes: number;
+    attendance_percentage: number;
+  };
+}
+
+export interface SchoolStudentsFilter {
+  level_id?: number;
+  specialization_id?: number;
+  section_id?: number;
+  page: number;
+  limit: number;
+  search?: string;
+}
+
+export interface UpdateSchoolStartTimeRequest {
+  school_start_time: string; // Format: "HH:MM:SS"
+}
+
+export interface CurrentQuarter {
+  id: number;
+  quarter_name: string;
+  start_date: string;
+  end_date: string;
+  school_start_time: string;
+}

@@ -100,3 +100,31 @@ export const requireTeacherOrAdminOrStaff = requireRole([
   "Admin",
   "Staff",
 ]);
+
+/**
+ * Middleware to require admin or staff role
+ */
+export const requireAdminOrStaff = (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): void => {
+  try {
+    const user = req.user as any;
+
+    if (!user || (user.type !== "Admin" && user.type !== "Staff")) {
+      res.status(403).json({
+        success: false,
+        error: "Access denied. Admin or Staff role required.",
+      });
+      return;
+    }
+
+    next();
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: "Authorization check failed",
+    });
+  }
+};
