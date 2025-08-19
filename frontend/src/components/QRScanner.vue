@@ -1,3 +1,4 @@
+<!-- frontend/src/components/QRScanner.vue -->
 <template>
   <div
     class="min-h-screen bg-gradient-to-br from-gray-50 via-gray-100 to-gray-200 p-4"
@@ -31,8 +32,6 @@
                   fill="currentColor"
                   viewBox="0 0 24 24"
                 >
-                  fb21e2d2-e932-4913-bf28-a78a0c4e8ddd
-
                   <!-- Top left corner -->
                   <rect x="2" y="2" width="7" height="7" />
                   <rect x="3" y="3" width="5" height="5" fill="white" />
@@ -260,154 +259,106 @@
                   <h3 class="text-lg font-semibold text-green-900 mb-4">
                     {{
                       scanResult.data?.action === "time_in"
-                        ? "✅ Time In Successful"
-                        : "✅ Time Out Successful"
+                        ? "Time In Successful"
+                        : "Time Out Successful"
                     }}
                   </h3>
 
                   <!-- Student Info -->
-                  <div class="space-y-4">
+                  <div class="space-y-3">
                     <div
-                      class="bg-white rounded-lg p-4 shadow-sm border border-green-100"
+                      class="bg-white rounded-lg p-4 border border-green-100"
                     >
-                      <h4
-                        class="font-medium text-gray-900 mb-3 flex items-center"
-                      >
-                        <svg
-                          class="w-5 h-5 text-gray-600 mr-2"
-                          fill="none"
-                          stroke="currentColor"
-                          viewBox="0 0 24 24"
-                        >
-                          <path
-                            stroke-linecap="round"
-                            stroke-linejoin="round"
-                            stroke-width="2"
-                            d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
-                          ></path>
-                        </svg>
+                      <h4 class="font-medium text-gray-900 mb-2">
                         Student Information
                       </h4>
-                      <div class="grid grid-cols-1 gap-2 text-sm">
-                        <div class="flex justify-between">
-                          <span class="font-medium text-gray-600">ID:</span>
-                          <span class="font-mono">{{
-                            scanResult.data?.student.student_id
-                          }}</span>
+                      <div class="space-y-1 text-sm">
+                        <div>
+                          <span class="font-medium">Name:</span>
+                          {{ formatStudentName(scanResult.data?.student) }}
                         </div>
-                        <div class="flex justify-between">
-                          <span class="font-medium text-gray-600">Name:</span>
-                          <span>{{
-                            formatStudentName(scanResult.data?.student)
-                          }}</span>
-                        </div>
-                        <div class="flex justify-between">
-                          <span class="font-medium text-gray-600">Class:</span>
-                          <span>{{
-                            formatStudentClass(scanResult.data?.student)
-                          }}</span>
+                        <div>
+                          <span class="font-medium">ID:</span>
+                          {{ scanResult.data?.student?.student_id }}
                         </div>
                         <div
-                          v-if="scanResult.data?.student.adviser"
-                          class="flex justify-between"
+                          v-if="formatStudentClass(scanResult.data?.student)"
                         >
-                          <span class="font-medium text-gray-600"
-                            >Adviser:</span
-                          >
-                          <span>{{
-                            formatAdviserName(scanResult.data?.student.adviser)
-                          }}</span>
+                          <span class="font-medium">Class:</span>
+                          {{ formatStudentClass(scanResult.data?.student) }}
+                        </div>
+                        <div
+                          v-if="
+                            scanResult.data?.student?.adviser &&
+                            formatAdviserName(scanResult.data.student.adviser)
+                          "
+                        >
+                          <span class="font-medium">Adviser:</span>
+                          {{
+                            formatAdviserName(scanResult.data.student.adviser)
+                          }}
                         </div>
                       </div>
                     </div>
 
-                    <!-- Attendance Info -->
+                    <!-- Time Info -->
                     <div
-                      class="bg-white rounded-lg p-4 shadow-sm border border-green-100"
+                      class="bg-white rounded-lg p-4 border border-green-100"
                     >
-                      <h4
-                        class="font-medium text-gray-900 mb-3 flex items-center"
-                      >
-                        <svg
-                          class="w-5 h-5 text-gray-600 mr-2"
-                          fill="none"
-                          stroke="currentColor"
-                          viewBox="0 0 24 24"
-                        >
-                          <path
-                            stroke-linecap="round"
-                            stroke-linejoin="round"
-                            stroke-width="2"
-                            d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
-                          ></path>
-                        </svg>
-                        Attendance Details
+                      <h4 class="font-medium text-gray-900 mb-2">
+                        Time Information
                       </h4>
-                      <div class="grid grid-cols-1 gap-2 text-sm">
-                        <div class="flex justify-between">
-                          <span class="font-medium text-gray-600"
-                            >Time In:</span
-                          >
-                          <span class="font-mono">{{
-                            formatTime(scanResult.data?.attendance_log.time_in)
-                          }}</span>
+                      <div class="space-y-1 text-sm">
+                        <div v-if="scanResult.data?.attendance_log?.time_in">
+                          <span class="font-medium">Time In:</span>
+                          {{
+                            formatTime(scanResult.data.attendance_log.time_in)
+                          }}
+                        </div>
+                        <div v-if="scanResult.data?.attendance_log?.time_out">
+                          <span class="font-medium">Time Out:</span>
+                          {{
+                            formatTime(scanResult.data.attendance_log.time_out)
+                          }}
                         </div>
                         <div
-                          v-if="scanResult.data?.attendance_log.time_out"
-                          class="flex justify-between"
+                          v-if="scanResult.data?.is_late"
+                          class="text-orange-600"
                         >
-                          <span class="font-medium text-gray-600"
-                            >Time Out:</span
-                          >
-                          <span class="font-mono">{{
-                            formatTime(scanResult.data?.attendance_log.time_out)
-                          }}</span>
-                        </div>
-                        <div class="flex justify-between">
-                          <span class="font-medium text-gray-600">Status:</span>
-                          <span
-                            v-if="scanResult.data?.is_late"
-                            class="text-orange-600 font-medium"
-                          >
-                            Late
+                          <span class="font-medium">Status:</span>
+                          Late
+                          <span v-if="scanResult.data?.late_minutes">
+                            ({{ scanResult.data.late_minutes }} minutes)
                           </span>
-                          <span v-else class="text-green-600 font-medium"
-                            >On Time</span
-                          >
+                        </div>
+                        <div v-else class="text-green-600">
+                          <span class="font-medium">Status:</span>
+                          On Time
                         </div>
                       </div>
                     </div>
 
-                    <!-- Late Warning -->
+                    <!-- Late Tracking Info -->
                     <div
                       v-if="
-                        scanResult.data?.total_late_minutes &&
-                        scanResult.data.total_late_minutes > 50
+                        scanResult.data?.total_late_minutes !== undefined &&
+                        scanResult.data.total_late_minutes > 0
                       "
-                      class="bg-orange-50 border border-orange-200 rounded-lg p-4"
+                      class="bg-orange-50 rounded-lg p-4 border border-orange-200"
                     >
-                      <div class="flex items-center">
-                        <svg
-                          class="h-6 w-6 text-orange-500 mr-3"
-                          fill="none"
-                          viewBox="0 0 24 24"
-                          stroke="currentColor"
-                        >
-                          <path
-                            stroke-linecap="round"
-                            stroke-linejoin="round"
-                            stroke-width="2"
-                            d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 15.5c-.77.833.192 2.5 1.732 2.5z"
-                          />
-                        </svg>
+                      <h4 class="font-medium text-orange-900 mb-2">
+                        Quarter Late Summary
+                      </h4>
+                      <div class="text-sm text-orange-800">
                         <div>
-                          <p class="text-sm font-medium text-orange-800">
-                            Late Warning
-                          </p>
-                          <p class="text-sm text-orange-700">
-                            Total late minutes this quarter:
-                            {{ scanResult.data.total_late_minutes }}/70
-                          </p>
+                          <span class="font-medium">Total Late Minutes:</span>
+                          {{ scanResult.data.total_late_minutes }} / 70 minutes
+                        </div>
+                        <div
+                          v-if="scanResult.data.notification_triggered"
+                          class="mt-2 text-orange-700 font-medium"
+                        >
+                          ⚠️ Late notification sent to adviser
                         </div>
                       </div>
                     </div>
@@ -449,45 +400,19 @@
                 </div>
                 <div class="ml-4 flex-1">
                   <h3 class="text-lg font-semibold text-red-900 mb-2">
-                    ❌ Scan Failed
+                    Scan Failed
                   </h3>
-                  <p
-                    class="text-sm text-red-700 bg-white rounded p-3 border border-red-100"
+                  <p class="text-red-800">{{ scanError }}</p>
+                  <button
+                    @click="clearError"
+                    class="mt-3 text-sm text-red-600 hover:text-red-800 font-medium"
                   >
-                    {{ scanError }}
-                  </p>
+                    Try Again
+                  </button>
                 </div>
               </div>
             </div>
           </transition>
-
-          <!-- Placeholder when no results -->
-          <div
-            v-if="!scanResult && !scanError"
-            class="card bg-gray-50 border-gray-200 border-dashed"
-          >
-            <div class="text-center py-8">
-              <svg
-                class="mx-auto h-16 w-16 text-gray-400"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  stroke-width="1"
-                  d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-                ></path>
-              </svg>
-              <h3 class="mt-4 text-lg font-medium text-gray-900">
-                Ready to Scan
-              </h3>
-              <p class="mt-2 text-sm text-gray-500">
-                Student information will appear here after scanning
-              </p>
-            </div>
-          </div>
         </div>
       </div>
 
@@ -495,7 +420,7 @@
       <div class="text-center mt-8">
         <button
           @click="$router.push('/dashboard')"
-          class="btn-outline px-8 py-3"
+          class="inline-flex items-center text-gray-600 hover:text-gray-900 transition-colors"
         >
           <svg
             class="w-5 h-5 mr-2"
@@ -567,7 +492,6 @@ const handleScan = async () => {
     scanResult.value = result;
     qrInput.value = "";
 
-    // Auto-clear result after 5 seconds
     clearTimer = window.setTimeout(() => {
       clearResult();
     }, 8000);
@@ -578,7 +502,6 @@ const handleScan = async () => {
     scanError.value = error.message || "Scan failed";
     qrInput.value = "";
 
-    // Auto-clear error after 5 seconds
     clearTimer = window.setTimeout(() => {
       clearError();
     }, 5000);
@@ -631,8 +554,6 @@ const maintainFocus = () => {
 
 onMounted(() => {
   qrInputRef.value?.focus();
-
-  // Periodically refocus the input to ensure it stays focused
   refocusTimer = window.setInterval(maintainFocus, 2000);
 });
 

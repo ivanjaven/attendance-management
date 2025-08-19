@@ -1,3 +1,4 @@
+// frontend/src/services/attendanceService.ts
 import api from "./api";
 
 export interface QRScanRequest {
@@ -41,7 +42,6 @@ export interface QRScanResponse {
 export class AttendanceService {
   static async scanQR(scannedQRData: string): Promise<QRScanResponse> {
     try {
-      // Send the raw scanned data to backend for validation and processing
       const response = await api.post<QRScanResponse>("/attendance/scan", {
         qr_token: scannedQRData,
       });

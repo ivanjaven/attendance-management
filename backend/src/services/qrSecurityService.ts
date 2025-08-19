@@ -9,13 +9,9 @@ interface QRCodeData {
 export class QRSecurityService {
   private static readonly SECRET_SALT =
     process.env.QR_SECRET_SALT || "your-super-secret-salt-2024";
-  private static readonly HASH_LENGTH = 16; // Length of the encoded token
-  private static readonly CHECKSUM_LENGTH = 8; // Length of checksum for validation
+  private static readonly HASH_LENGTH = 16;
+  private static readonly CHECKSUM_LENGTH = 8;
 
-  /**
-   * Generate secure QR code data for printing on student IDs
-   * This method is used when creating/printing student ID cards
-   */
   static generateQRCodeForPrinting(qrToken: string): string {
     const encodedToken = this.encodeToken(qrToken);
     const checksum = this.generateChecksum(encodedToken);
@@ -25,19 +21,18 @@ export class QRSecurityService {
       checksum: checksum,
     };
 
-    // Return base64 encoded JSON for QR code
     return Buffer.from(JSON.stringify(qrData)).toString("base64");
   }
 
-  /**
-   * Validate and decode scanned QR code data
-   * Returns the original qr_token if valid, null if invalid
-   */
   static async validateAndDecodeQRCode(
     scannedData: string
   ): Promise<string | null> {
     try {
-      // Decode the base64 JSON
+      const base64Regex = /^[A-Za-z0-9+/]*={0,2}$/;
+      if (!base64Regex.test(scannedData)) {
+        return null;
+      }
+
       const decodedJson = Buffer.from(scannedData, "base64").toString("utf8");
       const qrData: QRCodeData = JSON.parse(decodedJson);
 
@@ -45,23 +40,17 @@ export class QRSecurityService {
         return null;
       }
 
-      // Validate checksum
       const expectedChecksum = this.generateChecksum(qrData.encoded_token);
       if (qrData.checksum !== expectedChecksum) {
-        return null; // QR code has been tampered with
+        return null;
       }
 
-      // Find the original token by testing against all active students
       return await this.findOriginalToken(qrData.encoded_token);
     } catch (error) {
-      console.error("QR validation error:", error);
       return null;
     }
   }
 
-  /**
-   * Encode the original qr_token into a secure hash
-   */
   private static encodeToken(qrToken: string): string {
     return crypto
       .createHmac("sha256", this.SECRET_SALT)
@@ -70,9 +59,6 @@ export class QRSecurityService {
       .substring(0, this.HASH_LENGTH);
   }
 
-  /**
-   * Generate checksum for data integrity validation
-   */
   private static generateChecksum(encodedToken: string): string {
     return crypto
       .createHash("md5")
@@ -81,16 +67,11 @@ export class QRSecurityService {
       .substring(0, this.CHECKSUM_LENGTH);
   }
 
-  /**
-   * Find original qr_token by testing encoded token against all active students
-   * This is necessary since hashing is one-way
-   */
   private static async findOriginalToken(
     encodedToken: string
   ): Promise<string | null> {
     const { supabase } = await import("../config/database");
 
-    // Get all active students with their qr_tokens
     const { data: students, error } = await supabase
       .from("students")
       .select("qr_token")
@@ -100,7 +81,6 @@ export class QRSecurityService {
       return null;
     }
 
-    // Test each student's qr_token to see if it produces the scanned encoded_token
     for (const student of students) {
       const testEncodedToken = this.encodeToken(student.qr_token);
       if (testEncodedToken === encodedToken) {
@@ -111,9 +91,6 @@ export class QRSecurityService {
     return null;
   }
 
-  /**
-   * Validate QR code format without decoding (for quick validation)
-   */
   static isValidQRFormat(scannedData: string): boolean {
     try {
       const decodedJson = Buffer.from(scannedData, "base64").toString("utf8");

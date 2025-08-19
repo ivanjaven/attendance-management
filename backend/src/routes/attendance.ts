@@ -1,3 +1,4 @@
+// backend/src/routes/attendance.ts
 import { Router, Request, Response } from "express";
 import { AttendanceService } from "../services/attendanceService";
 import { QRScanRequest } from "../types/attendance";

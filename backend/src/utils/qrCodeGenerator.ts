@@ -1,15 +1,12 @@
+// backend/src/utils/qrCodeGenerator.ts
 import { QRSecurityService } from "../services/qrSecurityService";
 import QRCode from "qrcode";
 
 export class QRCodeGenerator {
-  /**
-   * Generate QR code image for a student (for printing on ID cards)
-   */
   static async generateStudentQRCode(qrToken: string): Promise<string> {
     try {
       const secureQRData = QRSecurityService.generateQRCodeForPrinting(qrToken);
 
-      // Generate QR code as base64 image with correct options
       const qrCodeImage = await QRCode.toDataURL(secureQRData, {
         errorCorrectionLevel: "M",
         type: "image/png",
@@ -29,9 +26,6 @@ export class QRCodeGenerator {
     }
   }
 
-  /**
-   * Generate multiple QR codes for batch student card printing
-   */
   static async generateBatchQRCodes(
     students: Array<{ id: number; qr_token: string; student_id: string }>
   ): Promise<Array<{ studentId: string; qrCodeImage: string }>> {
@@ -51,16 +45,12 @@ export class QRCodeGenerator {
           `Failed to generate QR for student ${student.student_id}:`,
           errorMessage
         );
-        // Continue with other students
       }
     }
 
     return results;
   }
 
-  /**
-   * Generate QR code as buffer (for direct file saving)
-   */
   static async generateStudentQRCodeBuffer(qrToken: string): Promise<Buffer> {
     try {
       const secureQRData = QRSecurityService.generateQRCodeForPrinting(qrToken);
@@ -84,9 +74,6 @@ export class QRCodeGenerator {
     }
   }
 
-  /**
-   * Generate QR code with custom size and options
-   */
   static async generateCustomQRCode(
     qrToken: string,
     options: {

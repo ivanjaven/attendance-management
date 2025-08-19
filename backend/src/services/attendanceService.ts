@@ -1,3 +1,4 @@
+// backend/src/services/attendanceService.ts
 import { supabase } from "../config/database";
 import { QRSecurityService } from "./qrSecurityService";
 import {
@@ -20,7 +21,6 @@ export class AttendanceService {
     notificationTriggered?: boolean;
   }> {
     try {
-      // Validate and decode the QR code first
       const originalQRToken = await QRSecurityService.validateAndDecodeQRCode(
         scanData.qr_token
       );
@@ -67,42 +67,78 @@ export class AttendanceService {
     notificationTriggered?: boolean;
   }> {
     const currentTime = new Date();
-    const timeIn = currentTime.toTimeString().split(" ")[0]; // HH:MM:SS format
+    const timeString = currentTime.toTimeString().split(" ")[0];
 
-    const { isLate, lateMinutes } = await this.calculateLateStatus(
-      currentTime,
-      today
-    );
-
-    let attendanceLog: AttendanceLog;
-
-    if (existingLog) {
-      attendanceLog = await this.updateAttendanceLog(existingLog.id, {
-        time_in: timeIn,
-        is_late: isLate,
-        late_minutes: lateMinutes,
-      });
-    } else {
-      attendanceLog = await this.createAttendanceLog({
-        student_id: student.id,
-        attendance_date: new Date(today),
-        time_in: timeIn,
-        is_late: isLate,
-        late_minutes: lateMinutes,
-      });
+    const currentQuarter = await this.getCurrentQuarter();
+    if (!currentQuarter) {
+      throw new Error("No active quarter found");
     }
 
-    let totalLateMinutes: number | undefined;
+    const schoolStartTime = currentQuarter.school_start_time;
+    const isLate = this.calculateIsLate(timeString, schoolStartTime);
+    const lateMinutes = isLate
+      ? this.calculateLateMinutes(timeString, schoolStartTime)
+      : 0;
+
+    let attendanceLog: AttendanceLog;
+    if (existingLog) {
+      const { data, error } = await supabase
+        .from("attendance_log")
+        .update({
+          time_in: timeString,
+          is_late: isLate,
+          late_minutes: lateMinutes,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", existingLog.id)
+        .select()
+        .single();
+
+      if (error) {
+        throw new Error("Failed to update attendance log");
+      }
+      attendanceLog = data;
+    } else {
+      const { data, error } = await supabase
+        .from("attendance_log")
+        .insert({
+          student_id: student.id,
+          attendance_date: today,
+          time_in: timeString,
+          is_late: isLate,
+          late_minutes: lateMinutes,
+        })
+        .select()
+        .single();
+
+      if (error) {
+        throw new Error("Failed to create attendance log");
+      }
+      attendanceLog = data;
+    }
+
+    let totalLateMinutes = 0;
     let notificationTriggered = false;
 
     if (isLate && lateMinutes > 0) {
       const lateTrackingResult = await this.updateLateTracking(
         student.id,
-        lateMinutes,
-        today
+        currentQuarter.id,
+        lateMinutes
       );
       totalLateMinutes = lateTrackingResult.totalLateMinutes;
-      notificationTriggered = lateTrackingResult.notificationTriggered;
+
+      if (totalLateMinutes >= 70 && !lateTrackingResult.notificationSent) {
+        notificationTriggered = await this.sendLateThresholdNotification(
+          student.id,
+          student.adviser_id,
+          totalLateMinutes
+        );
+
+        if (notificationTriggered) {
+          await this.markNotificationSent(student.id, currentQuarter.id);
+        }
+      }
     }
 
     const studentWithDetails = await this.getStudentWithDetails(student.id);
@@ -112,8 +148,8 @@ export class AttendanceService {
       attendanceLog,
       isLate,
       action: "time_in",
-      lateMinutes: isLate ? lateMinutes : undefined,
-      totalLateMinutes,
+      lateMinutes: lateMinutes > 0 ? lateMinutes : undefined,
+      totalLateMinutes: totalLateMinutes > 0 ? totalLateMinutes : undefined,
       notificationTriggered,
     };
   }
@@ -128,198 +164,30 @@ export class AttendanceService {
     action: "time_out";
   }> {
     const currentTime = new Date();
-    const timeOut = currentTime.toTimeString().split(" ")[0]; // HH:MM:SS format
+    const timeString = currentTime.toTimeString().split(" ")[0];
 
-    const attendanceLog = await this.updateAttendanceLog(existingLog.id, {
-      time_out: timeOut,
-    });
+    const { data, error } = await supabase
+      .from("attendance_log")
+      .update({
+        time_out: timeString,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", existingLog.id)
+      .select()
+      .single();
+
+    if (error) {
+      throw new Error("Failed to update time out");
+    }
 
     const studentWithDetails = await this.getStudentWithDetails(student.id);
 
     return {
       student: studentWithDetails,
-      attendanceLog,
-      isLate: existingLog.is_late,
+      attendanceLog: data,
+      isLate: data.is_late,
       action: "time_out",
     };
-  }
-
-  private static async calculateLateStatus(
-    currentTime: Date,
-    date: string
-  ): Promise<{ isLate: boolean; lateMinutes: number }> {
-    try {
-      const currentQuarter = await this.getCurrentQuarter(date);
-      if (!currentQuarter) {
-        return { isLate: false, lateMinutes: 0 };
-      }
-
-      const schoolStartTime = currentQuarter.school_start_time;
-      const currentTimeString = currentTime.toTimeString().split(" ")[0];
-
-      if (currentTimeString <= schoolStartTime) {
-        return { isLate: false, lateMinutes: 0 };
-      }
-
-      const schoolStart = new Date(`1970-01-01T${schoolStartTime}`);
-      const currentTimeForComparison = new Date(
-        `1970-01-01T${currentTimeString}`
-      );
-
-      const timeDifferenceMs =
-        currentTimeForComparison.getTime() - schoolStart.getTime();
-      const lateMinutes = Math.floor(timeDifferenceMs / (1000 * 60));
-
-      return { isLate: true, lateMinutes };
-    } catch (error) {
-      return { isLate: false, lateMinutes: 0 };
-    }
-  }
-
-  private static async getCurrentQuarter(
-    date: string
-  ): Promise<Quarter | null> {
-    const { data, error } = await supabase
-      .from("quarters")
-      .select("*")
-      .lte("start_date", date)
-      .gte("end_date", date)
-      .is("deleted_at", null)
-      .single();
-
-    if (error || !data) {
-      return null;
-    }
-
-    return {
-      id: data.id,
-      quarter_name: data.quarter_name,
-      start_date: new Date(data.start_date),
-      end_date: new Date(data.end_date),
-      school_start_time: data.school_start_time,
-      created_at: new Date(data.created_at),
-      updated_at: new Date(data.updated_at),
-    };
-  }
-
-  private static async updateLateTracking(
-    studentId: number,
-    lateMinutes: number,
-    date: string
-  ): Promise<{
-    totalLateMinutes: number;
-    notificationTriggered: boolean;
-  }> {
-    try {
-      const currentQuarter = await this.getCurrentQuarter(date);
-      if (!currentQuarter) {
-        return { totalLateMinutes: lateMinutes, notificationTriggered: false };
-      }
-
-      const { data: existingTracking, error: fetchError } = await supabase
-        .from("student_late_tracking")
-        .select("*")
-        .eq("student_id", studentId)
-        .eq("quarter_id", currentQuarter.id)
-        .single();
-
-      let totalLateMinutes: number;
-      let notificationTriggered = false;
-
-      if (fetchError || !existingTracking) {
-        totalLateMinutes = lateMinutes;
-        const { error: insertError } = await supabase
-          .from("student_late_tracking")
-          .insert({
-            student_id: studentId,
-            quarter_id: currentQuarter.id,
-            total_late_minutes: totalLateMinutes,
-            notification_sent: totalLateMinutes >= 70,
-          });
-
-        if (insertError) {
-          throw insertError;
-        }
-
-        if (totalLateMinutes >= 70) {
-          notificationTriggered = await this.sendLateNotification(
-            studentId,
-            totalLateMinutes
-          );
-        }
-      } else {
-        totalLateMinutes = existingTracking.total_late_minutes + lateMinutes;
-        const shouldSendNotification =
-          totalLateMinutes >= 70 && !existingTracking.notification_sent;
-
-        const { error: updateError } = await supabase
-          .from("student_late_tracking")
-          .update({
-            total_late_minutes: totalLateMinutes,
-            notification_sent:
-              existingTracking.notification_sent || shouldSendNotification,
-            last_updated: new Date().toISOString(),
-          })
-          .eq("student_id", studentId)
-          .eq("quarter_id", currentQuarter.id);
-
-        if (updateError) {
-          throw updateError;
-        }
-
-        if (shouldSendNotification) {
-          notificationTriggered = await this.sendLateNotification(
-            studentId,
-            totalLateMinutes
-          );
-        }
-      }
-
-      return { totalLateMinutes, notificationTriggered };
-    } catch (error) {
-      return { totalLateMinutes: lateMinutes, notificationTriggered: false };
-    }
-  }
-
-  private static async sendLateNotification(
-    studentId: number,
-    totalLateMinutes: number
-  ): Promise<boolean> {
-    try {
-      const { data: student, error: studentError } = await supabase
-        .from("students")
-        .select(
-          `
-          first_name,
-          last_name,
-          adviser_id
-        `
-        )
-        .eq("id", studentId)
-        .is("deleted_at", null)
-        .single();
-
-      if (studentError || !student || !student.adviser_id) {
-        return false;
-      }
-
-      const message = `${student.first_name} ${student.last_name} has exceeded the late threshold with ${totalLateMinutes} minutes of tardiness this quarter.`;
-
-      const { error: notificationError } = await supabase
-        .from("notifications")
-        .insert({
-          student_id: studentId,
-          teacher_id: student.adviser_id,
-          type: "Alert",
-          message,
-          sent_at: new Date().toISOString(),
-          status: "Sent",
-        });
-
-      return !notificationError;
-    } catch (error) {
-      return false;
-    }
   }
 
   private static async findStudentByQRToken(
@@ -353,37 +221,42 @@ export class AttendanceService {
   }
 
   private static async getStudentWithDetails(studentId: number): Promise<any> {
-    const { data: studentData, error } = await supabase
+    const { data: studentData, error: studentError } = await supabase
       .from("students")
-      .select(
-        `
-        *,
-        levels!inner(level),
-        sections!inner(section_name),
-        specializations!inner(specialization_name),
-        teachers!inner(first_name, last_name, middle_name)
-      `
-      )
+      .select("*")
       .eq("id", studentId)
       .is("deleted_at", null)
       .single();
 
-    if (error || !studentData) {
+    if (studentError || !studentData) {
       throw new Error("Student not found");
     }
 
-    const level = Array.isArray(studentData.levels)
-      ? studentData.levels[0]
-      : studentData.levels;
-    const section = Array.isArray(studentData.sections)
-      ? studentData.sections[0]
-      : studentData.sections;
-    const specialization = Array.isArray(studentData.specializations)
-      ? studentData.specializations[0]
-      : studentData.specializations;
-    const adviser = Array.isArray(studentData.teachers)
-      ? studentData.teachers[0]
-      : studentData.teachers;
+    const [levelResult, sectionResult, specializationResult, teacherResult] =
+      await Promise.all([
+        supabase
+          .from("levels")
+          .select("level")
+          .eq("id", studentData.level_id)
+          .single(),
+        supabase
+          .from("sections")
+          .select("section_name")
+          .eq("id", studentData.section_id)
+          .single(),
+        supabase
+          .from("specializations")
+          .select("specialization_name")
+          .eq("id", studentData.specialization_id)
+          .single(),
+        studentData.adviser_id
+          ? supabase
+              .from("teachers")
+              .select("first_name, last_name, middle_name")
+              .eq("auth_id", studentData.adviser_id)
+              .single()
+          : Promise.resolve({ data: null, error: null }),
+      ]);
 
     return {
       id: studentData.id,
@@ -391,20 +264,16 @@ export class AttendanceService {
       first_name: studentData.first_name,
       last_name: studentData.last_name,
       middle_name: studentData.middle_name,
-      level: level ? level.level : null,
-      section: section ? section.section_name : null,
-      specialization: specialization
-        ? specialization.specialization_name
-        : null,
-      adviser: adviser
+      level: levelResult.data?.level || null,
+      section: sectionResult.data?.section_name || null,
+      specialization: specializationResult.data?.specialization_name || null,
+      adviser: teacherResult.data
         ? {
-            first_name: adviser.first_name,
-            last_name: adviser.last_name,
-            middle_name: adviser.middle_name,
+            first_name: teacherResult.data.first_name,
+            last_name: teacherResult.data.last_name,
+            middle_name: teacherResult.data.middle_name,
           }
         : null,
-      created_at: new Date(studentData.created_at),
-      updated_at: new Date(studentData.updated_at),
     };
   }
 
@@ -420,7 +289,7 @@ export class AttendanceService {
       .is("deleted_at", null)
       .single();
 
-    if (error || !data) {
+    if (error) {
       return null;
     }
 
@@ -431,78 +300,150 @@ export class AttendanceService {
       time_in: data.time_in,
       time_out: data.time_out,
       is_late: data.is_late,
-      late_minutes: data.late_minutes || 0,
+      late_minutes: data.late_minutes,
       created_at: new Date(data.created_at),
       updated_at: new Date(data.updated_at),
     };
   }
 
-  private static async createAttendanceLog(logData: {
-    student_id: number;
-    attendance_date: Date;
-    time_in: string;
-    is_late: boolean;
-    late_minutes: number;
-  }): Promise<AttendanceLog> {
+  private static async getCurrentQuarter(): Promise<Quarter | null> {
+    const today = new Date().toISOString().split("T")[0];
     const { data, error } = await supabase
-      .from("attendance_log")
-      .insert({
-        student_id: logData.student_id,
-        attendance_date: logData.attendance_date.toISOString().split("T")[0],
-        time_in: logData.time_in,
-        is_late: logData.is_late,
-        late_minutes: logData.late_minutes,
+      .from("quarters")
+      .select("*")
+      .lte("start_date", today)
+      .gte("end_date", today)
+      .is("deleted_at", null)
+      .single();
+
+    if (error || !data) {
+      return null;
+    }
+
+    return {
+      id: data.id,
+      quarter_name: data.quarter_name,
+      start_date: new Date(data.start_date),
+      end_date: new Date(data.end_date),
+      school_start_time: data.school_start_time,
+      created_at: new Date(data.created_at),
+      updated_at: new Date(data.updated_at),
+    };
+  }
+
+  private static calculateIsLate(
+    arrivalTime: string,
+    schoolStartTime: string
+  ): boolean {
+    const arrival = new Date(`1970-01-01T${arrivalTime}`);
+    const schoolStart = new Date(`1970-01-01T${schoolStartTime}`);
+    return arrival > schoolStart;
+  }
+
+  private static calculateLateMinutes(
+    arrivalTime: string,
+    schoolStartTime: string
+  ): number {
+    const arrival = new Date(`1970-01-01T${arrivalTime}`);
+    const schoolStart = new Date(`1970-01-01T${schoolStartTime}`);
+    const diffMs = arrival.getTime() - schoolStart.getTime();
+    return Math.max(0, Math.floor(diffMs / (1000 * 60)));
+  }
+
+  private static async updateLateTracking(
+    studentId: number,
+    quarterId: number,
+    lateMinutes: number
+  ): Promise<{ totalLateMinutes: number; notificationSent: boolean }> {
+    const { data: existingTracking, error: fetchError } = await supabase
+      .from("student_late_tracking")
+      .select("*")
+      .eq("student_id", studentId)
+      .eq("quarter_id", quarterId)
+      .single();
+
+    if (fetchError && fetchError.code !== "PGRST116") {
+      throw new Error("Failed to fetch late tracking");
+    }
+
+    let totalLateMinutes = lateMinutes;
+    let notificationSent = false;
+
+    if (existingTracking) {
+      totalLateMinutes = existingTracking.total_late_minutes + lateMinutes;
+      notificationSent = existingTracking.notification_sent;
+
+      const { error: updateError } = await supabase
+        .from("student_late_tracking")
+        .update({
+          total_late_minutes: totalLateMinutes,
+          last_updated: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", existingTracking.id);
+
+      if (updateError) {
+        throw new Error("Failed to update late tracking");
+      }
+    } else {
+      const { error: insertError } = await supabase
+        .from("student_late_tracking")
+        .insert({
+          student_id: studentId,
+          quarter_id: quarterId,
+          total_late_minutes: totalLateMinutes,
+          notification_sent: false,
+          last_updated: new Date().toISOString(),
+        });
+
+      if (insertError) {
+        throw new Error("Failed to create late tracking");
+      }
+    }
+
+    return { totalLateMinutes, notificationSent };
+  }
+
+  private static async sendLateThresholdNotification(
+    studentId: number,
+    teacherId: number,
+    totalLateMinutes: number
+  ): Promise<boolean> {
+    try {
+      const message = `Student has exceeded the 70-minute late threshold with ${totalLateMinutes} minutes of tardiness this quarter.`;
+
+      const { error: notificationError } = await supabase
+        .from("notifications")
+        .insert({
+          student_id: studentId,
+          teacher_id: teacherId,
+          type: "Alert",
+          message,
+          sent_at: new Date().toISOString(),
+          status: "Sent",
+        });
+
+      return !notificationError;
+    } catch (error) {
+      return false;
+    }
+  }
+
+  private static async markNotificationSent(
+    studentId: number,
+    quarterId: number
+  ): Promise<void> {
+    const { error } = await supabase
+      .from("student_late_tracking")
+      .update({
+        notification_sent: true,
+        updated_at: new Date().toISOString(),
       })
-      .select()
-      .single();
+      .eq("student_id", studentId)
+      .eq("quarter_id", quarterId);
 
-    if (error || !data) {
-      throw new Error("Failed to create attendance log");
+    if (error) {
+      throw new Error("Failed to mark notification as sent");
     }
-
-    return {
-      id: data.id,
-      student_id: data.student_id,
-      attendance_date: new Date(data.attendance_date),
-      time_in: data.time_in,
-      time_out: data.time_out,
-      is_late: data.is_late,
-      late_minutes: data.late_minutes || 0,
-      created_at: new Date(data.created_at),
-      updated_at: new Date(data.updated_at),
-    };
-  }
-
-  private static async updateAttendanceLog(
-    logId: number,
-    updates: {
-      time_in?: string;
-      time_out?: string;
-      is_late?: boolean;
-      late_minutes?: number;
-    }
-  ): Promise<AttendanceLog> {
-    const { data, error } = await supabase
-      .from("attendance_log")
-      .update(updates)
-      .eq("id", logId)
-      .select()
-      .single();
-
-    if (error || !data) {
-      throw new Error("Failed to update attendance log");
-    }
-
-    return {
-      id: data.id,
-      student_id: data.student_id,
-      attendance_date: new Date(data.attendance_date),
-      time_in: data.time_in,
-      time_out: data.time_out,
-      is_late: data.is_late,
-      late_minutes: data.late_minutes || 0,
-      created_at: new Date(data.created_at),
-      updated_at: new Date(data.updated_at),
-    };
   }
 }
