@@ -1,131 +1,121 @@
 import { Router, Request, Response } from "express";
 import { DashboardService } from "../services/dashboardService";
-import {
-  authenticateToken,
-  requireAdmin,
-  requireTeacher,
-  requireStaff,
-  requireTeacherOrAdminOrStaff,
-} from "../middleware/auth";
-import { Teacher, Admin, Staff } from "../types/auth";
+import { authenticateToken, requireTeacher } from "../middleware/auth";
+import { Teacher } from "../types/auth";
 
 const router = Router();
 
 /**
- * GET /api/dashboard/summary
- * Get basic dashboard summary (available to all authenticated users)
+ * GET /api/dashboard/teacher/summary
+ * Get teacher's advisory class attendance summary for today
  */
 router.get(
-  "/summary",
-  authenticateToken,
-  requireTeacherOrAdminOrStaff,
-  async (req: Request, res: Response): Promise<void> => {
-    try {
-      const summary = await DashboardService.getDashboardSummary();
-
-      res.status(200).json({
-        success: true,
-        data: summary,
-        message: "Dashboard summary retrieved successfully",
-      });
-    } catch (error: any) {
-      console.error("Dashboard Summary Error:", error);
-      res.status(500).json({
-        success: false,
-        error: error.message || "Failed to get dashboard summary",
-      });
-    }
-  }
-);
-
-/**
- * GET /api/dashboard/teacher
- * Get teacher-specific dashboard data
- */
-router.get(
-  "/teacher",
+  "/teacher/summary",
   authenticateToken,
   requireTeacher,
   async (req: Request, res: Response): Promise<void> => {
     try {
       const teacher = req.user as Teacher;
-      const dashboardData = await DashboardService.getTeacherDashboard(teacher);
+      const summary = await DashboardService.getTeacherTodaySummary(teacher);
 
       res.status(200).json({
         success: true,
-        data: dashboardData,
-        message: "Teacher dashboard data retrieved successfully",
+        data: summary,
+        message: "Teacher summary retrieved successfully",
       });
     } catch (error: any) {
-      console.error("Teacher Dashboard Error:", error);
+      console.error("Teacher Summary Error:", error);
       res.status(500).json({
         success: false,
-        error: error.message || "Failed to get teacher dashboard data",
+        error: error.message || "Failed to get teacher summary",
       });
     }
   }
 );
 
 /**
- * GET /api/dashboard/admin
- * Get admin-specific dashboard data
+ * GET /api/dashboard/teacher/notifications
+ * Get teacher's notifications for today
  */
 router.get(
-  "/admin",
+  "/teacher/notifications",
   authenticateToken,
-  requireAdmin,
+  requireTeacher,
   async (req: Request, res: Response): Promise<void> => {
     try {
-      const dashboardData = await DashboardService.getAdminDashboard();
+      const teacher = req.user as Teacher;
+      const notifications = await DashboardService.getTeacherNotifications(
+        teacher
+      );
 
       res.status(200).json({
         success: true,
-        data: dashboardData,
-        message: "Admin dashboard data retrieved successfully",
+        data: notifications,
+        message: "Notifications retrieved successfully",
       });
     } catch (error: any) {
-      console.error("Admin Dashboard Error:", error);
+      console.error("Teacher Notifications Error:", error);
       res.status(500).json({
         success: false,
-        error: error.message || "Failed to get admin dashboard data",
+        error: error.message || "Failed to get notifications",
       });
     }
   }
 );
 
 /**
- * GET /api/dashboard/staff
- * Get staff-specific dashboard data
+ * GET /api/dashboard/teacher/student-records
+ * Get all attendance records for teacher's advisory students
  */
 router.get(
-  "/staff",
+  "/teacher/student-records",
   authenticateToken,
-  requireStaff,
+  requireTeacher,
   async (req: Request, res: Response): Promise<void> => {
     try {
-      const dashboardData = await DashboardService.getStaffDashboard();
+      const teacher = req.user as Teacher;
+      const {
+        page = 1,
+        limit = 20,
+        student_id,
+        date_from,
+        date_to,
+      } = req.query;
+
+      const filters = {
+        student_id: student_id ? parseInt(student_id as string) : undefined,
+        date_from: date_from as string,
+        date_to: date_to as string,
+        page: parseInt(page as string),
+        limit: parseInt(limit as string),
+      };
+
+      const records = await DashboardService.getStudentRecords(
+        teacher,
+        filters
+      );
 
       res.status(200).json({
         success: true,
-        data: dashboardData,
-        message: "Staff dashboard data retrieved successfully",
+        data: records,
+        message: "Student records retrieved successfully",
       });
     } catch (error: any) {
-      console.error("Staff Dashboard Error:", error);
+      console.error("Student Records Error:", error);
       res.status(500).json({
         success: false,
-        error: error.message || "Failed to get staff dashboard data",
+        error: error.message || "Failed to get student records",
       });
     }
   }
 );
 
 /**
- * PUT /api/dashboard/notifications/:id/read
- * Mark notification as read (teachers only)
+ * PUT /api/dashboard/teacher/notifications/:id/read
+ * Mark notification as read
  */
 router.put(
-  "/notifications/:id/read",
+  "/teacher/notifications/:id/read",
   authenticateToken,
   requireTeacher,
   async (req: Request, res: Response): Promise<void> => {
