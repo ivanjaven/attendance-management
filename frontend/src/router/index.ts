@@ -1,3 +1,4 @@
+// frontend/src/router/index.ts
 import { createRouter, createWebHistory } from "vue-router";
 import type { RouteRecordRaw } from "vue-router";
 import { useAuthStore } from "@/stores/auth";
@@ -5,6 +6,7 @@ import { useAuthStore } from "@/stores/auth";
 import LoginView from "@/views/LoginView.vue";
 import DashboardView from "@/views/DashboardView.vue";
 import QRScannerView from "@/views/QRScannerView.vue";
+import AdvisoryClassView from "@/views/AdvisoryClassView.vue";
 
 const routes: RouteRecordRaw[] = [
   {
@@ -28,6 +30,12 @@ const routes: RouteRecordRaw[] = [
     name: "qr-scanner",
     component: QRScannerView,
     meta: { requiresAuth: true },
+  },
+  {
+    path: "/advisory-class",
+    name: "advisory-class",
+    component: AdvisoryClassView,
+    meta: { requiresAuth: true, requiresTeacher: true },
   },
   {
     path: "/admin",
@@ -63,7 +71,13 @@ router.beforeEach((to, from, next) => {
 
   // Check admin access
   if (to.meta.requiresAdmin && !authStore.isAdmin) {
-    next("/dashboard"); // Redirect non-admins to dashboard
+    next("/dashboard");
+    return;
+  }
+
+  // Check teacher access
+  if (to.meta.requiresTeacher && !authStore.isTeacher) {
+    next("/dashboard");
     return;
   }
 

@@ -11,6 +11,23 @@
             <p class="text-gray-600">Welcome back, {{ userDisplayName }}</p>
           </div>
           <div class="flex items-center space-x-4">
+            <!-- Notifications badge for teachers -->
+            <div
+              v-if="isTeacher && unreadNotificationsCount > 0"
+              class="relative"
+            >
+              <button
+                @click="showNotificationsModal = true"
+                class="p-2 text-gray-600 hover:text-gray-900 relative"
+              >
+                <BellIcon class="h-6 w-6" />
+                <span
+                  class="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center"
+                >
+                  {{ unreadNotificationsCount }}
+                </span>
+              </button>
+            </div>
             <span
               class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium"
               :class="getRoleBadgeClass()"
@@ -34,30 +51,89 @@
       <div class="px-4 py-6 sm:px-0">
         <!-- Dashboard Cards -->
         <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
-          <!-- Quick Stats -->
-          <div class="card-compact">
-            <h3 class="text-lg font-semibold text-gray-900 mb-2">
-              Today's Attendance
-            </h3>
-            <p class="text-3xl font-bold text-primary-600">0</p>
-            <p class="text-sm text-gray-500">Students scanned in</p>
-          </div>
+          <!-- Teacher Summary Cards -->
+          <template v-if="isTeacher">
+            <div class="card-compact">
+              <h3 class="text-lg font-semibold text-gray-900 mb-2">
+                Present Today
+              </h3>
+              <p class="text-3xl font-bold text-green-600">
+                {{ teacherSummary?.present_today ?? 0 }}
+              </p>
+              <p class="text-sm text-gray-500">Students present</p>
+            </div>
 
-          <div class="card-compact">
-            <h3 class="text-lg font-semibold text-gray-900 mb-2">
-              Late Students
-            </h3>
-            <p class="text-3xl font-bold text-orange-600">0</p>
-            <p class="text-sm text-gray-500">Students late today</p>
-          </div>
+            <div class="card-compact">
+              <h3 class="text-lg font-semibold text-gray-900 mb-2">
+                Late Students
+              </h3>
+              <p class="text-3xl font-bold text-orange-600">
+                {{ teacherSummary?.late_today ?? 0 }}
+              </p>
+              <p class="text-sm text-gray-500">Students late today</p>
+            </div>
 
-          <div class="card-compact">
-            <h3 class="text-lg font-semibold text-gray-900 mb-2">
-              Total Students
-            </h3>
-            <p class="text-3xl font-bold text-secondary-600">0</p>
-            <p class="text-sm text-gray-500">Registered students</p>
-          </div>
+            <div class="card-compact">
+              <h3 class="text-lg font-semibold text-gray-900 mb-2">
+                Total Students
+              </h3>
+              <p class="text-3xl font-bold text-blue-600">
+                {{ teacherSummary?.total_students ?? 0 }}
+              </p>
+              <p class="text-sm text-gray-500">In advisory class</p>
+            </div>
+
+            <!-- Attendance Percentage Card -->
+            <div class="card-compact">
+              <h3 class="text-lg font-semibold text-gray-900 mb-2">
+                Attendance Rate
+              </h3>
+              <p class="text-3xl font-bold text-primary-600">
+                {{ (teacherSummary?.attendance_percentage ?? 0).toFixed(1) }}%
+              </p>
+              <p class="text-sm text-gray-500">Today's attendance</p>
+            </div>
+
+            <!-- Advisory Class Info -->
+            <div class="card-compact md:col-span-2">
+              <h3 class="text-lg font-semibold text-gray-900 mb-2">
+                Advisory Class
+              </h3>
+              <p class="text-xl font-medium text-gray-800">
+                {{
+                  teacherSummary?.advisory_class ?? "No Advisory Class Assigned"
+                }}
+              </p>
+              <p class="text-sm text-gray-500">Your assigned advisory class</p>
+            </div>
+          </template>
+
+          <!-- Default cards for non-teachers -->
+          <template v-else>
+            <div class="card-compact">
+              <h3 class="text-lg font-semibold text-gray-900 mb-2">
+                Today's Attendance
+              </h3>
+              <p class="text-3xl font-bold text-primary-600">0</p>
+              <p class="text-sm text-gray-500">Students scanned in</p>
+            </div>
+
+            <div class="card-compact">
+              <h3 class="text-lg font-semibold text-gray-900 mb-2">
+                Late Students
+              </h3>
+              <p class="text-3xl font-bold text-orange-600">0</p>
+              <p class="text-sm text-gray-500">Students late today</p>
+            </div>
+
+            <div class="card-compact">
+              <h3 class="text-lg font-semibold text-gray-900 mb-2">
+                Total Students
+              </h3>
+              <p class="text-3xl font-bold text-secondary-600">0</p>
+              <p class="text-sm text-gray-500">Registered students</p>
+            </div>
+          </template>
         </div>
 
         <!-- Action Cards -->
@@ -81,10 +157,10 @@
             <p class="text-gray-600 mb-6">
               View attendance and manage your advisory students
             </p>
-            <button class="btn-secondary">
+            <router-link to="/advisory-class" class="btn-secondary">
               <UsersIcon class="h-5 w-5 mr-2 inline" />
               View My Class
-            </button>
+            </router-link>
           </div>
 
           <!-- Only show for Staff -->
@@ -125,18 +201,48 @@
         </div>
       </div>
     </main>
+
+    <!-- Notifications Modal -->
+    <NotificationsModal
+      v-if="showNotificationsModal"
+      :notifications="notifications"
+      @close="showNotificationsModal = false"
+      @mark-read="markNotificationAsRead"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, onMounted, ref } from "vue";
 import { useRouter } from "vue-router";
 import { useAuthStore } from "@/stores/auth";
 import QRGenerator from "@/components/admin/QRGenerator.vue";
-import { QrCodeIcon, UsersIcon, ClockIcon } from "@heroicons/vue/24/outline";
+import NotificationsModal from "@/components/teacher/NotificationsModal.vue";
+import {
+  QrCodeIcon,
+  UsersIcon,
+  ClockIcon,
+  BellIcon,
+} from "@heroicons/vue/24/outline";
+import { useDashboardApi } from "@/composables/useDashboardApi";
+import type {
+  TeacherSummary,
+  TeacherNotification,
+} from "@/composables/useDashboardApi";
 
 const router = useRouter();
 const authStore = useAuthStore();
+const {
+  getTeacherSummary,
+  getTeacherNotifications,
+  markNotificationAsRead: markNotificationRead,
+} = useDashboardApi();
+
+// Reactive state
+const teacherSummary = ref<TeacherSummary | null>(null);
+const notifications = ref<TeacherNotification[]>([]);
+const loadingSummary = ref(false);
+const showNotificationsModal = ref(false);
 
 // Computed
 const user = computed(() => authStore.user);
@@ -145,6 +251,10 @@ const isAdmin = computed(() => authStore.isAdmin);
 const isTeacher = computed(() => authStore.isTeacher);
 const isStaff = computed(() => authStore.isStaff);
 const userDisplayName = computed(() => authStore.userDisplayName);
+
+const unreadNotificationsCount = computed(() => {
+  return notifications.value.filter((n) => n.status === "UNREAD").length;
+});
 
 // Methods
 const getRoleBadgeClass = () => {
@@ -170,4 +280,51 @@ const handleLogout = async () => {
     router.push("/login");
   }
 };
+
+const loadTeacherData = async () => {
+  if (!isTeacher.value) return;
+
+  loadingSummary.value = true;
+  try {
+    // Load teacher summary
+    const summaryResponse = await getTeacherSummary();
+    if (summaryResponse.success && summaryResponse.data) {
+      teacherSummary.value = summaryResponse.data;
+    }
+
+    // Load notifications
+    const notificationsResponse = await getTeacherNotifications();
+    if (notificationsResponse.success && notificationsResponse.data) {
+      notifications.value = notificationsResponse.data;
+    }
+  } catch (error) {
+    console.error("Error loading teacher data:", error);
+  } finally {
+    loadingSummary.value = false;
+  }
+};
+
+const markNotificationAsRead = async (notificationId: number) => {
+  try {
+    const response = await markNotificationRead(notificationId);
+    if (response.success) {
+      // Update the notification status locally
+      const notification = notifications.value.find(
+        (n) => n.id === notificationId
+      );
+      if (notification) {
+        notification.status = "READ";
+      }
+    }
+  } catch (error) {
+    console.error("Error marking notification as read:", error);
+  }
+};
+
+// Lifecycle
+onMounted(() => {
+  if (isTeacher.value) {
+    loadTeacherData();
+  }
+});
 </script>

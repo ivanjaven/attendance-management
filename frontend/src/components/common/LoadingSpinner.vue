@@ -1,12 +1,13 @@
+<!-- frontend/src/components/common/LoadingSpinner.vue -->
 <template>
-  <div class="flex items-center justify-center" :class="containerClass">
-    <div
-      class="animate-spin rounded-full border-2 border-gray-300 border-t-primary-600"
-      :class="sizeClass"
-    ></div>
-    <span v-if="text" class="ml-3 text-gray-600" :class="textClass">{{
-      text
-    }}</span>
+  <div :class="containerClass">
+    <div :class="spinnerClass">
+      <div
+        class="animate-spin rounded-full border-b-2"
+        :class="sizeClass"
+      ></div>
+    </div>
+    <p v-if="message" :class="messageClass">{{ message }}</p>
   </div>
 </template>
 
@@ -14,46 +15,75 @@
 import { computed } from "vue";
 
 interface Props {
-  size?: "sm" | "md" | "lg";
-  text?: string;
-  container?: "inline" | "block" | "full";
+  size?: "sm" | "md" | "lg" | "xl";
+  variant?: "primary" | "secondary" | "white";
+  message?: string;
+  centered?: boolean;
+  fullHeight?: boolean;
 }
 
 const props = withDefaults(defineProps<Props>(), {
   size: "md",
-  container: "inline",
-});
-
-const sizeClass = computed(() => {
-  switch (props.size) {
-    case "sm":
-      return "h-4 w-4";
-    case "lg":
-      return "h-8 w-8";
-    default:
-      return "h-6 w-6";
-  }
-});
-
-const textClass = computed(() => {
-  switch (props.size) {
-    case "sm":
-      return "text-sm";
-    case "lg":
-      return "text-lg";
-    default:
-      return "text-base";
-  }
+  variant: "primary",
+  centered: true,
+  fullHeight: false,
 });
 
 const containerClass = computed(() => {
-  switch (props.container) {
-    case "block":
-      return "w-full py-4";
-    case "full":
-      return "min-h-[200px] w-full";
-    default:
-      return "";
+  const classes = [];
+
+  if (props.centered) {
+    classes.push("flex flex-col items-center justify-center");
   }
+
+  if (props.fullHeight) {
+    classes.push("min-h-screen");
+  } else {
+    classes.push("py-8");
+  }
+
+  return classes.join(" ");
+});
+
+const spinnerClass = computed(() => {
+  return "flex items-center justify-center";
+});
+
+const sizeClass = computed(() => {
+  const sizeMap = {
+    sm: "h-4 w-4",
+    md: "h-8 w-8",
+    lg: "h-12 w-12",
+    xl: "h-16 w-16",
+  };
+
+  const colorMap = {
+    primary: "border-primary-600",
+    secondary: "border-secondary-600",
+    white: "border-white",
+  };
+
+  return `${sizeMap[props.size]} ${colorMap[props.variant]}`;
+});
+
+const messageClass = computed(() => {
+  const baseClasses = "mt-4 text-center";
+
+  const sizeClasses = {
+    sm: "text-sm",
+    md: "text-base",
+    lg: "text-lg",
+    xl: "text-xl",
+  };
+
+  const colorClasses = {
+    primary: "text-gray-600",
+    secondary: "text-gray-600",
+    white: "text-white",
+  };
+
+  return `${baseClasses} ${sizeClasses[props.size]} ${
+    colorClasses[props.variant]
+  }`;
 });
 </script>
