@@ -271,7 +271,8 @@ export class DashboardService {
   }
 
   /**
-   * Get all attendance records for teacher's advisory students
+   * Get all students in advisory class with their attendance status
+   * This will show ALL students including absent ones
    */
   static async getStudentRecords(
     teacher: Teacher,
@@ -295,8 +296,23 @@ export class DashboardService {
         };
       }
 
-      const advisoryStudents = await this.getAdvisoryStudentIds(teacher);
-      if (advisoryStudents.length === 0) {
+      // Get all students in the advisory class
+      let studentsQuery = supabase
+        .from("students")
+        .select("id, student_id, first_name, last_name, middle_name")
+        .eq("level_id", teacher.advisory_level_id)
+        .eq("specialization_id", teacher.advisory_specialization_id)
+        .eq("section_id", teacher.advisory_section_id)
+        .is("deleted_at", null);
+
+      // Apply student filter if specified
+      if (filters.student_id) {
+        studentsQuery = studentsQuery.eq("id", filters.student_id);
+      }
+
+      const { data: allStudents } = await studentsQuery;
+
+      if (!allStudents || allStudents.length === 0) {
         return {
           records: [],
           pagination: {
@@ -308,74 +324,106 @@ export class DashboardService {
         };
       }
 
-      let query = supabase
+      // Set up date range (default to today if no filters)
+      const today = new Date().toISOString().split("T")[0];
+      const dateFrom = filters.date_from || today;
+      const dateTo = filters.date_to || today;
+
+      // Get all attendance records for these students in the date range
+      const studentIds = allStudents.map((s) => s.id);
+      const { data: attendanceRecords } = await supabase
         .from("attendance_log")
         .select(
-          "id, student_id, attendance_date, time_in, time_out, is_late, late_minutes",
-          { count: "exact" }
+          "student_id, attendance_date, time_in, time_out, is_late, late_minutes"
         )
-        .in("student_id", advisoryStudents)
+        .in("student_id", studentIds)
+        .gte("attendance_date", dateFrom)
+        .lte("attendance_date", dateTo)
         .is("deleted_at", null);
 
-      if (filters.student_id) {
-        query = query.eq("student_id", filters.student_id);
-      }
-      if (filters.date_from) {
-        query = query.gte("attendance_date", filters.date_from);
-      }
-      if (filters.date_to) {
-        query = query.lte("attendance_date", filters.date_to);
-      }
+      // Create a map of attendance records by student and date
+      const attendanceMap = new Map<string, any>();
+      attendanceRecords?.forEach((record) => {
+        const key = `${record.student_id}-${record.attendance_date}`;
+        attendanceMap.set(key, record);
+      });
 
-      // Apply pagination
-      const offset = (filters.page - 1) * filters.limit;
-      query = query
-        .order("attendance_date", { ascending: false })
-        .range(offset, offset + filters.limit - 1);
+      // Generate all date-student combinations
+      const allRecords: StudentRecord[] = [];
+      const startDate = new Date(dateFrom);
+      const endDate = new Date(dateTo);
 
-      const { data: records, error, count } = await query;
-      if (error) throw error;
+      for (const student of allStudents) {
+        const studentName = [
+          student.first_name,
+          student.middle_name,
+          student.last_name,
+        ]
+          .filter(Boolean)
+          .join(" ");
 
-      // Map to response format with student info
-      const mappedRecords: StudentRecord[] = [];
+        // Generate records for each date in the range
+        for (
+          let date = new Date(startDate);
+          date <= endDate;
+          date.setDate(date.getDate() + 1)
+        ) {
+          const dateStr = date.toISOString().split("T")[0];
+          const attendanceKey = `${student.id}-${dateStr}`;
+          const attendanceRecord = attendanceMap.get(attendanceKey);
 
-      if (records && records.length > 0) {
-        for (const record of records) {
-          // Get student info separately
-          const { data: student } = await supabase
-            .from("students")
-            .select("student_id, first_name, last_name")
-            .eq("id", record.student_id)
-            .single();
+          let status: "PRESENT" | "LATE" | "ABSENT" = "ABSENT";
+          let timeIn: string | undefined = undefined;
+          let timeOut: string | undefined = undefined;
+          let isLate = false;
+          let lateMinutes = 0;
+          let recordId = 0;
 
-          if (student) {
-            const studentName = `${student.first_name} ${student.last_name}`;
-            let status: "PRESENT" | "LATE" | "ABSENT" = "ABSENT";
-
-            if (record.time_in) {
-              status = record.is_late ? "LATE" : "PRESENT";
-            }
-
-            mappedRecords.push({
-              id: record.id,
-              student_name: studentName,
-              student_id: student.student_id,
-              attendance_date: new Date(record.attendance_date),
-              time_in: record.time_in,
-              time_out: record.time_out,
-              is_late: record.is_late,
-              late_minutes: record.late_minutes,
-              status,
-            });
+          if (attendanceRecord) {
+            recordId = Date.now() + Math.random(); // Generate unique ID
+            timeIn = attendanceRecord.time_in;
+            timeOut = attendanceRecord.time_out;
+            isLate = attendanceRecord.is_late;
+            lateMinutes = attendanceRecord.late_minutes || 0;
+            status = isLate ? "LATE" : "PRESENT";
+          } else {
+            // Create a unique ID for absent records
+            recordId = Date.now() + Math.random();
           }
+
+          allRecords.push({
+            id: recordId,
+            student_name: studentName,
+            student_id: student.student_id,
+            attendance_date: new Date(dateStr),
+            time_in: timeIn,
+            time_out: timeOut,
+            is_late: isLate,
+            late_minutes: lateMinutes,
+            status: status,
+          });
         }
       }
 
-      const totalRecords = count || 0;
+      // Sort records by date (newest first) then by student name
+      allRecords.sort((a, b) => {
+        const dateCompare =
+          new Date(b.attendance_date).getTime() -
+          new Date(a.attendance_date).getTime();
+        if (dateCompare !== 0) return dateCompare;
+        return a.student_name.localeCompare(b.student_name);
+      });
+
+      // Apply pagination to the final records
+      const totalRecords = allRecords.length;
+      const startIndex = (filters.page - 1) * filters.limit;
+      const endIndex = startIndex + filters.limit;
+      const paginatedRecords = allRecords.slice(startIndex, endIndex);
+
       const totalPages = Math.ceil(totalRecords / filters.limit);
 
       return {
-        records: mappedRecords,
+        records: paginatedRecords,
         pagination: {
           current_page: filters.page,
           total_pages: totalPages,
