@@ -39,7 +39,9 @@
 
     <!-- Stats Cards -->
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+      <!-- Stats Cards with Skeleton Loading -->
       <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+        <!-- Present Card -->
         <div class="card-compact">
           <div class="flex items-center">
             <div class="flex-shrink-0">
@@ -51,11 +53,18 @@
             </div>
             <div class="ml-4">
               <p class="text-sm font-medium text-gray-600">Present Today</p>
-              <p class="text-2xl font-bold text-gray-900">{{ totalPresent }}</p>
+              <p
+                v-if="!summaryLoading"
+                class="text-2xl font-bold text-gray-900"
+              >
+                {{ totalPresent }}
+              </p>
+              <SkeletonLoader v-else width="3rem" height="2rem" class="mt-1" />
             </div>
           </div>
         </div>
 
+        <!-- Late Card -->
         <div class="card-compact">
           <div class="flex items-center">
             <div class="flex-shrink-0">
@@ -67,11 +76,18 @@
             </div>
             <div class="ml-4">
               <p class="text-sm font-medium text-gray-600">Late Today</p>
-              <p class="text-2xl font-bold text-gray-900">{{ totalLate }}</p>
+              <p
+                v-if="!summaryLoading"
+                class="text-2xl font-bold text-gray-900"
+              >
+                {{ totalLate }}
+              </p>
+              <SkeletonLoader v-else width="3rem" height="2rem" class="mt-1" />
             </div>
           </div>
         </div>
 
+        <!-- Absent Card -->
         <div class="card-compact">
           <div class="flex items-center">
             <div class="flex-shrink-0">
@@ -83,36 +99,46 @@
             </div>
             <div class="ml-4">
               <p class="text-sm font-medium text-gray-600">Absent Today</p>
-              <p class="text-2xl font-bold text-gray-900">{{ totalAbsent }}</p>
+              <p
+                v-if="!summaryLoading"
+                class="text-2xl font-bold text-gray-900"
+              >
+                {{ totalAbsent }}
+              </p>
+              <SkeletonLoader v-else width="3rem" height="2rem" class="mt-1" />
             </div>
           </div>
         </div>
 
+        <!-- Attendance Rate Card -->
         <div class="card-compact">
           <div class="flex items-center">
             <div class="flex-shrink-0">
               <div
-                class="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center"
+                class="w-10 h-10 bg-primary-100 rounded-lg flex items-center justify-center"
               >
-                <ChartBarIcon class="h-6 w-6 text-blue-600" />
+                <ChartBarIcon class="h-6 w-6 text-primary-600" />
               </div>
             </div>
             <div class="ml-4">
               <p class="text-sm font-medium text-gray-600">Attendance Rate</p>
-              <p class="text-2xl font-bold text-gray-900">
+              <p
+                v-if="!summaryLoading"
+                class="text-2xl font-bold text-gray-900"
+              >
                 {{ attendanceRate }}%
               </p>
+              <SkeletonLoader v-else width="4rem" height="2rem" class="mt-1" />
             </div>
           </div>
         </div>
       </div>
 
-      <!-- Filters and Search -->
-      <div class="card mb-6">
-        <div class="mb-6">
-          <div
-            class="flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-4 sm:space-y-0"
-          >
+      <!-- Attendance Records Table -->
+      <div class="card">
+        <!-- Table Header -->
+        <div class="px-6 py-4 border-b border-gray-200">
+          <div class="flex items-center justify-between">
             <div>
               <h2 class="text-xl font-semibold text-gray-900">
                 Attendance Records
@@ -177,9 +203,24 @@
           </div>
         </div>
 
-        <!-- Records Table -->
+        <!-- Table Content -->
         <div class="overflow-x-auto">
-          <table class="min-w-full divide-y divide-gray-200">
+          <!-- Skeleton Loading Table -->
+          <TableSkeleton
+            v-if="loading"
+            :headers="[
+              'Student',
+              'Date',
+              'Time In',
+              'Time Out',
+              'Status',
+              'Late Minutes',
+            ]"
+            :rows="10"
+          />
+
+          <!-- Actual Table -->
+          <table v-else class="min-w-full divide-y divide-gray-200">
             <thead class="bg-gray-50">
               <tr>
                 <th
@@ -215,17 +256,8 @@
               </tr>
             </thead>
             <tbody class="bg-white divide-y divide-gray-200">
-              <tr v-if="loading" class="animate-pulse">
-                <td colspan="6" class="px-6 py-12 text-center">
-                  <div class="flex justify-center">
-                    <div
-                      class="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600"
-                    ></div>
-                  </div>
-                  <p class="mt-2 text-sm text-gray-600">Loading records...</p>
-                </td>
-              </tr>
-              <tr v-else-if="studentRecords.length === 0">
+              <!-- No Records State -->
+              <tr v-if="studentRecords.length === 0">
                 <td colspan="6" class="px-6 py-12 text-center">
                   <UsersIcon class="mx-auto h-12 w-12 text-gray-300" />
                   <p class="mt-2 text-sm font-medium text-gray-900">
@@ -236,11 +268,14 @@
                   </p>
                 </td>
               </tr>
+
+              <!-- Student Records -->
               <tr
                 v-for="record in studentRecords"
                 :key="record.id"
                 class="hover:bg-gray-50 transition-colors"
               >
+                <!-- Student Info -->
                 <td class="px-6 py-4 whitespace-nowrap">
                   <div class="flex items-center">
                     <div
@@ -260,24 +295,34 @@
                     </div>
                   </div>
                 </td>
+
+                <!-- Date -->
                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                   {{ formatDate(record.attendance_date) }}
                 </td>
+
+                <!-- Time In -->
                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                   {{ record.time_in || "-" }}
                 </td>
+
+                <!-- Time Out -->
                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                   {{ record.time_out || "-" }}
                 </td>
+
+                <!-- Status -->
                 <td class="px-6 py-4 whitespace-nowrap">
                   <span
-                    class="inline-flex px-2 py-1 text-xs font-semibold rounded-full"
+                    class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium"
                     :class="getStatusBadgeClass(record.status)"
                   >
                     {{ record.status }}
                   </span>
                 </td>
-                <td class="px-6 py-4 whitespace-nowrap text-sm">
+
+                <!-- Late Minutes -->
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                   <span
                     v-if="record.late_minutes > 0"
                     class="text-orange-600 font-medium"
@@ -293,59 +338,57 @@
 
         <!-- Pagination -->
         <div
-          v-if="pagination.total_pages > 1"
-          class="mt-6 pt-6 border-t border-gray-200"
+          v-if="!loading && studentRecords.length > 0"
+          class="px-6 py-4 flex items-center justify-between border-t border-gray-200"
         >
-          <div class="flex items-center justify-between">
-            <div class="text-sm text-gray-700">
-              Showing
-              {{ (pagination.current_page - 1) * pagination.per_page + 1 }} to
-              {{
-                Math.min(
-                  pagination.current_page * pagination.per_page,
-                  pagination.total_records
-                )
-              }}
-              of {{ pagination.total_records }} results
-            </div>
-            <div class="flex items-center space-x-2">
+          <div class="text-sm text-gray-500">
+            Showing
+            {{ (pagination.current_page - 1) * pagination.per_page + 1 }} to
+            {{
+              Math.min(
+                pagination.current_page * pagination.per_page,
+                pagination.total_records
+              )
+            }}
+            of {{ pagination.total_records }} results
+          </div>
+          <div class="flex items-center space-x-2">
+            <button
+              @click="changePage(pagination.current_page - 1)"
+              :disabled="pagination.current_page <= 1"
+              class="btn-secondary text-sm"
+              :class="{
+                'opacity-50 cursor-not-allowed': pagination.current_page <= 1,
+              }"
+            >
+              Previous
+            </button>
+            <div class="flex items-center space-x-1">
               <button
-                @click="changePage(pagination.current_page - 1)"
-                :disabled="pagination.current_page <= 1"
-                class="btn-secondary text-sm"
-                :class="{
-                  'opacity-50 cursor-not-allowed': pagination.current_page <= 1,
-                }"
+                v-for="page in visiblePages"
+                :key="page"
+                @click="changePage(page)"
+                class="px-3 py-1 text-sm rounded-md transition-colors"
+                :class="[
+                  page === pagination.current_page
+                    ? 'bg-primary-600 text-white'
+                    : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50',
+                ]"
               >
-                Previous
-              </button>
-              <div class="flex space-x-1">
-                <button
-                  v-for="page in visiblePages"
-                  :key="page"
-                  @click="changePage(page)"
-                  :class="[
-                    'px-3 py-1 text-sm rounded-md',
-                    page === pagination.current_page
-                      ? 'bg-primary-600 text-white'
-                      : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50',
-                  ]"
-                >
-                  {{ page }}
-                </button>
-              </div>
-              <button
-                @click="changePage(pagination.current_page + 1)"
-                :disabled="pagination.current_page >= pagination.total_pages"
-                class="btn-secondary text-sm"
-                :class="{
-                  'opacity-50 cursor-not-allowed':
-                    pagination.current_page >= pagination.total_pages,
-                }"
-              >
-                Next
+                {{ page }}
               </button>
             </div>
+            <button
+              @click="changePage(pagination.current_page + 1)"
+              :disabled="pagination.current_page >= pagination.total_pages"
+              class="btn-secondary text-sm"
+              :class="{
+                'opacity-50 cursor-not-allowed':
+                  pagination.current_page >= pagination.total_pages,
+              }"
+            >
+              Next
+            </button>
           </div>
         </div>
       </div>
@@ -372,11 +415,16 @@ import type {
   TeacherSummary,
 } from "@/composables/useDashboardApi";
 
+// Import skeleton components
+import SkeletonLoader from "@/components/common/SkeletonLoader.vue";
+import TableSkeleton from "@/components/common/TableSkeleton.vue";
+
 // Composables
 const { getStudentRecords, getTeacherSummary } = useDashboardApi();
 
 // Reactive state
 const loading = ref(true);
+const summaryLoading = ref(true);
 const teacherSummary = ref<TeacherSummary | null>(null);
 const studentRecords = ref<StudentRecord[]>([]);
 const searchQuery = ref("");
@@ -487,6 +535,7 @@ const loadStudentRecords = async () => {
 };
 
 const loadTeacherSummary = async () => {
+  summaryLoading.value = true;
   try {
     const response = await getTeacherSummary();
     if (response.success && response.data) {
@@ -494,6 +543,8 @@ const loadTeacherSummary = async () => {
     }
   } catch (error) {
     console.error("Error loading teacher summary:", error);
+  } finally {
+    summaryLoading.value = false;
   }
 };
 
@@ -548,7 +599,6 @@ const getInitials = (name: string) => {
 
 // Lifecycle
 onMounted(async () => {
-  await loadTeacherSummary();
-  await loadStudentRecords();
+  await Promise.all([loadTeacherSummary(), loadStudentRecords()]);
 });
 </script>
