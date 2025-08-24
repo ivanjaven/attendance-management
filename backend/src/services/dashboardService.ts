@@ -116,155 +116,68 @@ export class DashboardService {
   }
 
   /**
-   * Get teacher's notifications for today
+   * Get teacher's notifications
    */
   static async getTeacherNotifications(
     teacher: Teacher
   ): Promise<TeacherNotification[]> {
     try {
-      const notifications: TeacherNotification[] = [];
+      // First, check and create new notifications
+      await this.check70MinuteNotifications(teacher.auth_id);
+      await this.checkConsecutiveAbsenceNotifications(teacher);
+
+      // Then fetch all existing notifications for today
       const today = new Date().toISOString().split("T")[0];
 
-      if (
-        !teacher.advisory_level_id ||
-        !teacher.advisory_specialization_id ||
-        !teacher.advisory_section_id
-      ) {
-        return notifications;
-      }
-
-      const advisoryStudents = await this.getAdvisoryStudentIds(teacher);
-      if (advisoryStudents.length === 0) return notifications;
-
-      // 1. Get late students for today
-      const { data: lateStudents } = await supabase
-        .from("attendance_log")
-        .select("student_id, late_minutes")
-        .in("student_id", advisoryStudents)
-        .eq("attendance_date", today)
-        .eq("is_late", true)
-        .is("deleted_at", null);
-
-      if (lateStudents && lateStudents.length > 0) {
-        for (const record of lateStudents) {
-          // Get student info separately
-          const { data: student } = await supabase
-            .from("students")
-            .select("student_id, first_name, last_name")
-            .eq("id", record.student_id)
-            .single();
-
-          if (student) {
-            const studentName = `${student.first_name} ${student.last_name}`;
-            notifications.push({
-              id: 0, // Real-time notification
-              student_name: studentName,
-              student_id: student.student_id,
-              type: "LATE_TODAY",
-              message: `${studentName} arrived ${record.late_minutes} minutes late today`,
-              sent_at: new Date(),
-              status: "UNREAD",
-              metadata: {
-                late_minutes: record.late_minutes,
-              },
-            });
-          }
-        }
-      }
-
-      // 2. Get students who exceeded 70-minute rule
-      const currentQuarter = await this.getCurrentQuarter();
-      if (currentQuarter) {
-        const { data: exceededStudents } = await supabase
-          .from("student_late_tracking")
-          .select("student_id, total_late_minutes")
-          .in("student_id", advisoryStudents)
-          .eq("quarter_id", currentQuarter.id)
-          .gte("total_late_minutes", 70);
-
-        if (exceededStudents && exceededStudents.length > 0) {
-          for (const record of exceededStudents) {
-            // Get student info separately
-            const { data: student } = await supabase
-              .from("students")
-              .select("student_id, first_name, last_name")
-              .eq("id", record.student_id)
-              .single();
-
-            if (student) {
-              const studentName = `${student.first_name} ${student.last_name}`;
-              notifications.push({
-                id: 0, // Real-time notification
-                student_name: studentName,
-                student_id: student.student_id,
-                type: "EXCEEDED_70_MINUTES",
-                message: `${studentName} has exceeded the 70-minute late limit with ${record.total_late_minutes} minutes`,
-                sent_at: new Date(),
-                status: "UNREAD",
-                metadata: {
-                  total_late_minutes: record.total_late_minutes,
-                },
-              });
-            }
-          }
-        }
-      }
-
-      // 3. Get students absent for 3+ consecutive days
-      const consecutiveAbsent = await this.getConsecutiveAbsentStudents(
-        advisoryStudents
-      );
-      consecutiveAbsent.forEach((student) => {
-        notifications.push({
-          id: 0, // Real-time notification
-          student_name: student.name,
-          student_id: student.student_id,
-          type: "CONSECUTIVE_ABSENCE",
-          message: `${student.name} has been absent for ${student.consecutive_days} consecutive days`,
-          sent_at: new Date(),
-          status: "UNREAD",
-          metadata: {
-            consecutive_days: student.consecutive_days,
-          },
-        });
-      });
-
-      // Also get existing notifications from database
-      const { data: existingNotifications } = await supabase
+      const { data: notifications } = await supabase
         .from("notifications")
-        .select("id, student_id, type, message, sent_at, status, metadata")
+        .select("id, student_id, type, message, sent_at, status")
         .eq("teacher_id", teacher.auth_id)
         .gte("sent_at", `${today}T00:00:00`)
         .order("sent_at", { ascending: false });
 
-      // Add existing notifications
-      if (existingNotifications && existingNotifications.length > 0) {
-        for (const notification of existingNotifications) {
-          const { data: student } = await supabase
-            .from("students")
-            .select("student_id, first_name, last_name")
-            .eq("id", notification.student_id)
-            .single();
+      if (!notifications) return [];
 
-          if (student) {
-            const studentName = `${student.first_name} ${student.last_name}`;
-            notifications.push({
-              id: notification.id,
-              student_name: studentName,
-              student_id: student.student_id,
-              type: notification.type as any,
-              message: notification.message,
-              sent_at: new Date(notification.sent_at),
-              status: notification.status as any,
-              metadata: notification.metadata,
-            });
+      // Get student details separately
+      const result: TeacherNotification[] = [];
+
+      for (const notification of notifications) {
+        const { data: student } = await supabase
+          .from("students")
+          .select("student_id, first_name, last_name")
+          .eq("id", notification.student_id)
+          .single();
+
+        if (student) {
+          // Determine notification type from message content
+          let notificationType: "EXCEEDED_70_MINUTES" | "CONSECUTIVE_ABSENCE";
+          let metadata: any = {};
+
+          if (notification.message.includes("70-minute")) {
+            notificationType = "EXCEEDED_70_MINUTES";
+            const match = notification.message.match(/(\d+) minutes total/);
+            metadata.total_late_minutes = match ? parseInt(match[1]) : 0;
+          } else {
+            notificationType = "CONSECUTIVE_ABSENCE";
+            metadata.consecutive_days = 3;
           }
+
+          result.push({
+            id: notification.id,
+            student_name: `${student.first_name} ${student.last_name}`,
+            student_id: student.student_id,
+            type: notificationType,
+            message: notification.message,
+            sent_at: new Date(notification.sent_at),
+            status: (notification.status === "Read" ? "READ" : "UNREAD") as
+              | "UNREAD"
+              | "READ",
+            metadata,
+          });
         }
       }
 
-      return notifications.sort(
-        (a, b) => b.sent_at.getTime() - a.sent_at.getTime()
-      );
+      return result;
     } catch (error: any) {
       throw new Error(`Failed to get teacher notifications: ${error.message}`);
     }
@@ -1035,6 +948,164 @@ export class DashboardService {
         schoolDays++;
       }
       currentDate.setDate(currentDate.getDate() + 1);
+    }
+
+    return schoolDays;
+  }
+
+  /**
+   * Check and create 70-minute exceeded notifications
+   */
+  private static async check70MinuteNotifications(
+    teacherId: string
+  ): Promise<void> {
+    try {
+      // Get current quarter
+      const quarter = await this.getCurrentQuarter();
+      if (!quarter) return;
+
+      // Find students who exceeded 70 minutes but haven't been notified
+      const { data: lateTrackingRecords } = await supabase
+        .from("student_late_tracking")
+        .select("student_id, total_late_minutes")
+        .eq("quarter_id", quarter.id)
+        .gte("total_late_minutes", 70)
+        .eq("notification_sent", false);
+
+      if (!lateTrackingRecords || lateTrackingRecords.length === 0) return;
+
+      // Check each student belongs to this teacher and create notifications
+      for (const record of lateTrackingRecords) {
+        // Get student info and check if they belong to this teacher
+        const { data: student } = await supabase
+          .from("students")
+          .select("id, first_name, last_name, student_id, adviser_id")
+          .eq("id", record.student_id)
+          .eq("adviser_id", teacherId)
+          .single();
+
+        if (student) {
+          const message = `${student.first_name} ${student.last_name} has exceeded the 70-minute late limit with ${record.total_late_minutes} minutes total.`;
+
+          // Insert notification
+          await supabase.from("notifications").insert({
+            student_id: student.id,
+            teacher_id: teacherId,
+            type: "Alert",
+            message,
+            sent_at: new Date().toISOString(),
+            status: "Sent",
+          });
+
+          // Mark as notified
+          await supabase
+            .from("student_late_tracking")
+            .update({ notification_sent: true })
+            .eq("student_id", record.student_id)
+            .eq("quarter_id", quarter.id);
+        }
+      }
+    } catch (error) {
+      console.error("Error checking 70-minute notifications:", error);
+    }
+  }
+
+  /**
+   * Check and create 3-consecutive-day absence notifications
+   */
+  private static async checkConsecutiveAbsenceNotifications(
+    teacher: Teacher
+  ): Promise<void> {
+    try {
+      // Get teacher's advisory students
+      const advisoryStudents = await this.getAdvisoryStudentIds(teacher);
+      if (advisoryStudents.length === 0) return;
+
+      // Check each student's last 3 school days
+      for (const studentId of advisoryStudents) {
+        const lastThreeSchoolDays = await this.getLastSchoolDays(3);
+
+        // Check if student was absent all 3 days
+        const { data: attendanceRecords } = await supabase
+          .from("attendance_log")
+          .select("attendance_date")
+          .eq("student_id", studentId)
+          .in("attendance_date", lastThreeSchoolDays)
+          .is("deleted_at", null);
+
+        const attendedDays =
+          attendanceRecords?.map((r) => r.attendance_date) || [];
+        const absentDays = lastThreeSchoolDays.filter(
+          (day) => !attendedDays.includes(day)
+        );
+
+        // If absent all 3 days, check if notification already sent
+        if (absentDays.length === 3) {
+          const { data: existingNotification } = await supabase
+            .from("notifications")
+            .select("id")
+            .eq("student_id", studentId)
+            .eq("teacher_id", teacher.auth_id)
+            .eq("type", "Alert")
+            .like("message", "%consecutive%")
+            .gte("sent_at", `${lastThreeSchoolDays[0]}T00:00:00`)
+            .single();
+
+          if (!existingNotification) {
+            // Get student info
+            const { data: student } = await supabase
+              .from("students")
+              .select("first_name, last_name, student_id")
+              .eq("id", studentId)
+              .single();
+
+            if (student) {
+              const message = `${student.first_name} ${student.last_name} has been absent for 3 consecutive school days.`;
+
+              await supabase.from("notifications").insert({
+                student_id: studentId,
+                teacher_id: teacher.auth_id,
+                type: "Alert",
+                message,
+                sent_at: new Date().toISOString(),
+                status: "Sent",
+              });
+            }
+          }
+        }
+      }
+    } catch (error) {
+      console.error("Error checking consecutive absence notifications:", error);
+    }
+  }
+
+  /**
+   * Get last N school days (excluding weekends and holidays)
+   */
+  private static async getLastSchoolDays(count: number): Promise<string[]> {
+    const schoolDays: string[] = [];
+    let currentDate = new Date();
+
+    while (schoolDays.length < count) {
+      currentDate.setDate(currentDate.getDate() - 1);
+      const dayOfWeek = currentDate.getDay();
+
+      // Skip weekends (Sunday = 0, Saturday = 6)
+      if (dayOfWeek !== 0 && dayOfWeek !== 6) {
+        const dateStr = currentDate.toISOString().split("T")[0];
+
+        // Check if it's a school day (if you have school_calendar data)
+        const { data: calendarEntry } = await supabase
+          .from("school_calendar")
+          .select("is_school_day")
+          .eq("calendar_date", dateStr)
+          .single();
+
+        // If no calendar entry, assume it's a school day
+        if (!calendarEntry || calendarEntry.is_school_day) {
+          schoolDays.unshift(dateStr); // Add to beginning to maintain chronological order
+        }
+      }
     }
 
     return schoolDays;

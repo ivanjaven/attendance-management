@@ -11,7 +11,7 @@ export interface TeacherNotification {
   id: number;
   student_name: string;
   student_id: string;
-  type: "LATE_TODAY" | "EXCEEDED_70_MINUTES" | "CONSECUTIVE_ABSENCE";
+  type: "EXCEEDED_70_MINUTES" | "CONSECUTIVE_ABSENCE";
   message: string;
   sent_at: Date;
   status: "UNREAD" | "READ";
