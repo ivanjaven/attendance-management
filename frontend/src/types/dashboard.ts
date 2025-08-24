@@ -95,6 +95,17 @@ export interface SchoolStudentRecord {
   };
 }
 
+export interface QuarterInfo {
+  id: number;
+  quarter_name: string;
+  start_date: string;
+  end_date: string;
+  school_start_time: string;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface ApiResponse<T> {
   success: boolean;
   data?: T;

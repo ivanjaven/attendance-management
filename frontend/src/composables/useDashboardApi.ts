@@ -1,66 +1,16 @@
 import { ref } from "vue";
 import api from "@/services/api";
-
-export interface TeacherSummary {
-  advisory_class: string;
-  total_students: number;
-  present_today: number;
-  absent_today: number;
-  late_today: number;
-  attendance_percentage: number;
-}
-
-export interface TeacherNotification {
-  id: number;
-  student_name: string;
-  student_id: string;
-  type: "LATE_TODAY" | "EXCEEDED_70_MINUTES" | "CONSECUTIVE_ABSENCE";
-  message: string;
-  sent_at: Date | string;
-  status: "UNREAD" | "READ";
-  metadata?: {
-    late_minutes?: number;
-    total_late_minutes?: number;
-    consecutive_days?: number;
-  };
-}
-
-export interface StudentRecord {
-  id: number;
-  student_name: string;
-  student_id: string;
-  attendance_date: Date | string;
-  time_in?: string;
-  time_out?: string;
-  is_late: boolean;
-  late_minutes: number;
-  status: "PRESENT" | "LATE" | "ABSENT";
-}
-
-export interface StudentRecordsResponse {
-  records: StudentRecord[];
-  pagination: {
-    current_page: number;
-    total_pages: number;
-    total_records: number;
-    per_page: number;
-  };
-}
-
-export interface StudentRecordsFilter {
-  student_id?: number;
-  date_from?: string;
-  date_to?: string;
-  page: number;
-  limit: number;
-}
-
-export interface ApiResponse<T> {
-  success: boolean;
-  data?: T;
-  message?: string;
-  error?: string;
-}
+import type {
+  TeacherSummary,
+  TeacherNotification,
+  StudentRecord,
+  StudentRecordsResponse,
+  StudentRecordsFilter,
+  SchoolAttendanceStats,
+  SchoolStudentsStats,
+  QuarterInfo,
+  ApiResponse,
+} from "@/types/dashboard";
 
 export const useDashboardApi = () => {
   const loading = ref(false);
@@ -131,13 +81,15 @@ export const useDashboardApi = () => {
   };
 
   // Admin/Staff Dashboard APIs
-  const getSchoolAttendanceStats = async (): Promise<ApiResponse<any>> => {
+  const getSchoolAttendanceStats = async (): Promise<
+    ApiResponse<SchoolAttendanceStats>
+  > => {
     return handleApiCall(() => api.get("/dashboard/school/attendance-stats"));
   };
 
   const getSchoolStudentsStats = async (
     filters: any
-  ): Promise<ApiResponse<any>> => {
+  ): Promise<ApiResponse<SchoolStudentsStats>> => {
     const params = new URLSearchParams();
 
     params.append("page", filters.page.toString());
@@ -171,7 +123,7 @@ export const useDashboardApi = () => {
     );
   };
 
-  const getCurrentQuarterInfo = async (): Promise<ApiResponse<any>> => {
+  const getCurrentQuarterInfo = async (): Promise<ApiResponse<QuarterInfo>> => {
     return handleApiCall(() => api.get("/dashboard/admin/current-quarter"));
   };
 
@@ -189,4 +141,16 @@ export const useDashboardApi = () => {
     updateSchoolStartTime,
     getCurrentQuarterInfo,
   };
+};
+
+export type {
+  TeacherSummary,
+  TeacherNotification,
+  StudentRecord,
+  StudentRecordsResponse,
+  StudentRecordsFilter,
+  SchoolAttendanceStats,
+  SchoolStudentsStats,
+  QuarterInfo,
+  ApiResponse,
 };
