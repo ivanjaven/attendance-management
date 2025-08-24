@@ -302,4 +302,97 @@ router.get(
   }
 );
 
+/**
+ * GET /api/dashboard/teacher/notifications/count
+ * Get unread notification count for teacher - NEW ROUTE
+ */
+router.get(
+  "/teacher/notifications/count",
+  authenticateToken,
+  requireTeacher,
+  async (req: Request, res: Response): Promise<void> => {
+    try {
+      const teacher = req.user as Teacher;
+      const count = await DashboardService.getTeacherUnreadNotificationCount(
+        teacher
+      );
+
+      res.status(200).json({
+        success: true,
+        data: { count },
+        message: "Unread notification count retrieved successfully",
+      });
+    } catch (error: any) {
+      console.error("Teacher Notification Count Error:", error);
+      res.status(500).json({
+        success: false,
+        error: error.message || "Failed to get notification count",
+      });
+    }
+  }
+);
+
+/**
+ * GET /api/dashboard/teacher/notifications - UPDATED ROUTE
+ * Get teacher's notifications with pagination
+ */
+router.get(
+  "/teacher/notifications",
+  authenticateToken,
+  requireTeacher,
+  async (req: Request, res: Response): Promise<void> => {
+    try {
+      const teacher = req.user as Teacher;
+      const { page = 1, limit = 10 } = req.query;
+
+      const result = await DashboardService.getTeacherNotifications(
+        teacher,
+        parseInt(page as string),
+        parseInt(limit as string)
+      );
+
+      res.status(200).json({
+        success: true,
+        data: result.notifications,
+        pagination: result.pagination,
+        message: "Notifications retrieved successfully",
+      });
+    } catch (error: any) {
+      console.error("Teacher Notifications Error:", error);
+      res.status(500).json({
+        success: false,
+        error: error.message || "Failed to get notifications",
+      });
+    }
+  }
+);
+
+/**
+ * PUT /api/dashboard/teacher/notifications/mark-all-read
+ * Mark all notifications as read - NEW ROUTE
+ */
+router.put(
+  "/teacher/notifications/mark-all-read",
+  authenticateToken,
+  requireTeacher,
+  async (req: Request, res: Response): Promise<void> => {
+    try {
+      const teacher = req.user as Teacher;
+
+      await DashboardService.markAllNotificationsAsRead(teacher.auth_id);
+
+      res.status(200).json({
+        success: true,
+        message: "All notifications marked as read",
+      });
+    } catch (error: any) {
+      console.error("Mark All Notifications Read Error:", error);
+      res.status(500).json({
+        success: false,
+        error: error.message || "Failed to mark all notifications as read",
+      });
+    }
+  }
+);
+
 export { router as dashboardRoutes };

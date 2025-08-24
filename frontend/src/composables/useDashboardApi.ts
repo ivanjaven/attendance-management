@@ -127,6 +127,43 @@ export const useDashboardApi = () => {
     return handleApiCall(() => api.get("/dashboard/admin/current-quarter"));
   };
 
+  const getTeacherNotificationCount = async (): Promise<
+    ApiResponse<{ count: number }>
+  > => {
+    return handleApiCall(() =>
+      api.get("/dashboard/teacher/notifications/count")
+    );
+  };
+
+  const getTeacherNotificationsPaginated = async (
+    page: number = 1,
+    limit: number = 10
+  ): Promise<
+    ApiResponse<{
+      notifications: TeacherNotification[];
+      pagination: {
+        current_page: number;
+        total_pages: number;
+        total_records: number;
+        per_page: number;
+      };
+    }>
+  > => {
+    const params = new URLSearchParams();
+    params.append("page", page.toString());
+    params.append("limit", limit.toString());
+
+    return handleApiCall(() =>
+      api.get(`/dashboard/teacher/notifications?${params.toString()}`)
+    );
+  };
+
+  const markAllNotificationsAsRead = async (): Promise<ApiResponse<void>> => {
+    return handleApiCall(() =>
+      api.put("/dashboard/teacher/notifications/mark-all-read")
+    );
+  };
+
   return {
     loading,
     error,
@@ -135,6 +172,9 @@ export const useDashboardApi = () => {
     getTeacherNotifications,
     getStudentRecords,
     markNotificationAsRead,
+    getTeacherNotificationCount,
+    getTeacherNotificationsPaginated,
+    markAllNotificationsAsRead,
     // Admin/Staff APIs
     getSchoolAttendanceStats,
     getSchoolStudentsStats,

@@ -1,3 +1,4 @@
+<!-- frontend/src/views/DashboardView.vue -->
 <template>
   <div class="min-h-screen bg-gray-50">
     <!-- Header -->
@@ -12,19 +13,30 @@
           </div>
           <div class="flex items-center space-x-4">
             <!-- Notifications badge for teachers -->
-            <div
-              v-if="isTeacher && unreadNotificationsCount > 0"
-              class="relative"
-            >
+            <div v-if="isTeacher" class="relative">
               <button
                 @click="showNotificationsModal = true"
                 class="p-2 text-gray-600 hover:text-gray-900 relative"
+                :class="{ 'animate-pulse': loadingNotificationCount }"
               >
                 <BellIcon class="h-6 w-6" />
                 <span
-                  class="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center"
+                  v-if="unreadNotificationsCount > 0"
+                  class="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center animate-pulse"
                 >
-                  {{ unreadNotificationsCount }}
+                  {{
+                    unreadNotificationsCount > 99
+                      ? "99+"
+                      : unreadNotificationsCount
+                  }}
+                </span>
+                <span
+                  v-else-if="loadingNotificationCount"
+                  class="absolute -top-1 -right-1 bg-gray-400 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center"
+                >
+                  <div
+                    class="animate-spin rounded-full h-3 w-3 border-b border-white"
+                  ></div>
                 </span>
               </button>
             </div>
@@ -78,51 +90,71 @@
                 {{ schoolAttendanceStats?.late_today ?? 0 }}
               </p>
               <SkeletonLoader v-else width="3rem" height="2rem" class="mt-1" />
-              <p class="text-sm text-gray-500">Students late today</p>
+              <p class="text-sm text-gray-500">Late arrivals</p>
             </div>
 
             <div class="card-compact">
               <h3 class="text-lg font-semibold text-gray-900 mb-2">
-                Total Students
+                Absent Students
               </h3>
               <p
                 v-if="!loadingAttendanceStats"
-                class="text-3xl font-bold text-secondary-600"
+                class="text-3xl font-bold text-red-600"
               >
-                {{ schoolAttendanceStats?.total_students ?? 0 }}
+                {{ schoolAttendanceStats?.absent_today ?? 0 }}
               </p>
               <SkeletonLoader v-else width="3rem" height="2rem" class="mt-1" />
-              <p class="text-sm text-gray-500">Registered students</p>
+              <p class="text-sm text-gray-500">Not present</p>
             </div>
           </template>
 
-          <!-- Teacher Summary Cards -->
+          <!-- Teacher Summary Cards (Real Data from API) -->
           <template v-if="isTeacher">
+            <!-- Present Students Card -->
             <div class="card-compact">
               <h3 class="text-lg font-semibold text-gray-900 mb-2">
                 Present Today
               </h3>
-              <p class="text-3xl font-bold text-green-600">
+              <p
+                v-if="!loadingSummary"
+                class="text-3xl font-bold text-primary-600"
+              >
                 {{ teacherSummary?.present_today ?? 0 }}
               </p>
-              <p class="text-sm text-gray-500">Students present</p>
+              <SkeletonLoader v-else width="3rem" height="2rem" class="mt-1" />
+              <p class="text-sm text-gray-500">
+                out of {{ teacherSummary?.total_students ?? 0 }}
+              </p>
             </div>
 
+            <!-- Absent Students Card -->
             <div class="card-compact">
               <h3 class="text-lg font-semibold text-gray-900 mb-2">
-                Late Students
+                Absent Today
+              </h3>
+              <p class="text-3xl font-bold text-red-600">
+                {{ teacherSummary?.absent_today ?? 0 }}
+              </p>
+              <p class="text-sm text-gray-500">Students absent</p>
+            </div>
+
+            <!-- Late Students Card -->
+            <div class="card-compact">
+              <h3 class="text-lg font-semibold text-gray-900 mb-2">
+                Late Today
               </h3>
               <p class="text-3xl font-bold text-orange-600">
                 {{ teacherSummary?.late_today ?? 0 }}
               </p>
-              <p class="text-sm text-gray-500">Students late today</p>
+              <p class="text-sm text-gray-500">Students late</p>
             </div>
 
+            <!-- Total Students Card -->
             <div class="card-compact">
               <h3 class="text-lg font-semibold text-gray-900 mb-2">
                 Total Students
               </h3>
-              <p class="text-3xl font-bold text-blue-600">
+              <p class="text-3xl font-bold text-gray-800">
                 {{ teacherSummary?.total_students ?? 0 }}
               </p>
               <p class="text-sm text-gray-500">In advisory class</p>
@@ -167,6 +199,20 @@
             </router-link>
           </div>
 
+          <!-- Teacher: Advisory Class Management -->
+          <div v-if="isTeacher" class="card">
+            <h3 class="text-xl font-semibold text-gray-900 mb-4">
+              Advisory Class
+            </h3>
+            <p class="text-gray-600 mb-6">
+              Manage your advisory class attendance records
+            </p>
+            <router-link to="/advisory-class" class="btn-primary">
+              <UsersIcon class="h-5 w-5 mr-2 inline" />
+              View Advisory Class
+            </router-link>
+          </div>
+
           <!-- Admin: School Start Time Management -->
           <div v-if="isAdmin" class="card">
             <h3 class="text-xl font-semibold text-gray-900 mb-4">
@@ -196,107 +242,24 @@
                     class="btn-secondary"
                   >
                     <ClockIcon class="h-5 w-5 mr-2 inline" />
-                    {{ updatingStartTime ? "Updating..." : "Update Time" }}
+                    {{ updatingStartTime ? "Updating..." : "Update" }}
                   </button>
                 </div>
-                <p class="text-xs text-gray-500 mt-2">
-                  Current:
-                  {{ formatTime(quarterInfo?.school_start_time) || "Not set" }}
-                </p>
-
-                <div
-                  v-if="startTimeUpdateMessage"
-                  class="mt-3 rounded-lg p-3 text-sm"
-                  :class="
-                    startTimeUpdateMessage.type === 'success'
-                      ? 'bg-green-50 text-green-700'
-                      : 'bg-red-50 text-red-700'
-                  "
-                >
-                  {{ startTimeUpdateMessage.text }}
-                </div>
               </div>
-            </div>
-          </div>
 
-          <!-- Teacher: My Advisory Class -->
-          <div v-if="isTeacher" class="card">
-            <h3 class="text-xl font-semibold text-gray-900 mb-4">
-              My Advisory Class
-            </h3>
-            <p class="text-gray-600 mb-6">
-              View attendance and manage your advisory students
-            </p>
-            <router-link to="/advisory-class" class="btn-secondary">
-              <UsersIcon class="h-5 w-5 mr-2 inline" />
-              View My Class
-            </router-link>
-          </div>
-
-          <!-- Staff: School Overview -->
-          <div v-if="isStaff" class="card">
-            <h3 class="text-xl font-semibold text-gray-900 mb-4">
-              School Overview
-            </h3>
-            <p class="text-gray-600 mb-6">
-              View today's attendance overview and statistics
-            </p>
-            <div class="space-y-3">
-              <div class="flex justify-between items-center">
-                <span class="text-sm text-gray-600">Attendance Rate</span>
-                <span
-                  v-if="!loadingAttendanceStats"
-                  class="font-semibold text-primary-600"
-                >
-                  {{
-                    (
-                      ((schoolAttendanceStats?.present_today ?? 0) /
-                        Math.max(
-                          schoolAttendanceStats?.total_students ?? 1,
-                          1
-                        )) *
-                      100
-                    ).toFixed(1)
-                  }}%
-                </span>
-                <SkeletonLoader v-else width="3rem" height="1rem" />
-              </div>
-              <div class="flex justify-between items-center">
-                <span class="text-sm text-gray-600">Absent Today</span>
-                <span
-                  v-if="!loadingAttendanceStats"
-                  class="font-semibold text-red-600"
-                >
-                  {{ schoolAttendanceStats?.absent_today ?? 0 }}
-                </span>
-                <SkeletonLoader v-else width="2rem" height="1rem" />
-              </div>
-              <div class="text-xs text-gray-500 pt-2 border-t">
-                Real-time attendance monitoring
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <!-- Admin-only QR Generator Section -->
-        <div v-if="isAdmin" class="mb-8">
-          <div class="card">
-            <div class="flex items-center mb-6">
+              <!-- Success/Error Messages -->
               <div
-                class="flex items-center justify-center w-12 h-12 bg-primary-100 rounded-lg"
+                v-if="startTimeUpdateMessage"
+                class="p-3 rounded-md"
+                :class="
+                  startTimeUpdateMessage.type === 'success'
+                    ? 'bg-green-100 text-green-800'
+                    : 'bg-red-100 text-red-800'
+                "
               >
-                <QrCodeIcon class="h-6 w-6 text-primary-600" />
-              </div>
-              <div class="ml-4">
-                <h3 class="text-xl font-semibold text-gray-900">
-                  QR Code Generator
-                </h3>
-                <p class="text-gray-600">
-                  Generate and manage student ID QR codes
-                </p>
+                {{ startTimeUpdateMessage.text }}
               </div>
             </div>
-            <QRGenerator />
           </div>
         </div>
       </div>
@@ -305,18 +268,17 @@
     <!-- Notifications Modal -->
     <NotificationsModal
       v-if="showNotificationsModal"
-      :notifications="notifications"
       @close="showNotificationsModal = false"
-      @mark-read="markNotificationAsRead"
+      @mark-read="handleMarkNotificationRead"
+      @mark-all-read="handleMarkAllNotificationsRead"
     />
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from "vue";
+import { ref, computed, onMounted } from "vue";
 import { useRouter } from "vue-router";
 import { useAuthStore } from "@/stores/auth";
-import QRGenerator from "@/components/admin/QRGenerator.vue";
 import NotificationsModal from "@/components/teacher/NotificationsModal.vue";
 import SkeletonLoader from "@/components/common/SkeletonLoader.vue";
 import {
@@ -326,29 +288,30 @@ import {
   BellIcon,
 } from "@heroicons/vue/24/outline";
 import { useDashboardApi } from "@/composables/useDashboardApi";
-import type {
-  TeacherSummary,
-  TeacherNotification,
-  SchoolAttendanceStats,
-} from "@/composables/useDashboardApi";
+import type { TeacherSummary, SchoolAttendanceStats } from "@/types/dashboard";
 
 const router = useRouter();
 const authStore = useAuthStore();
 const {
   getTeacherSummary,
-  getTeacherNotifications,
+  getTeacherNotificationCount,
   markNotificationAsRead: markNotificationRead,
+  markAllNotificationsAsRead,
   getSchoolAttendanceStats,
   updateSchoolStartTime,
   getCurrentQuarterInfo,
 } = useDashboardApi();
 
+// Reactive state
 const teacherSummary = ref<TeacherSummary | null>(null);
-const notifications = ref<TeacherNotification[]>([]);
 const schoolAttendanceStats = ref<SchoolAttendanceStats | null>(null);
 const quarterInfo = ref<any>(null);
+const notificationCount = ref(0);
+
+// Loading states
 const loadingSummary = ref(false);
 const loadingAttendanceStats = ref(false);
+const loadingNotificationCount = ref(false);
 const showNotificationsModal = ref(false);
 
 // School start time functionality
@@ -359,6 +322,7 @@ const startTimeUpdateMessage = ref<{
   text: string;
 } | null>(null);
 
+// Computed properties
 const user = computed(() => authStore.user);
 const isLoading = computed(() => authStore.isLoading);
 const isAdmin = computed(() => authStore.isAdmin);
@@ -366,9 +330,7 @@ const isTeacher = computed(() => authStore.isTeacher);
 const isStaff = computed(() => authStore.isStaff);
 const userDisplayName = computed(() => authStore.userDisplayName);
 
-const unreadNotificationsCount = computed(() => {
-  return notifications.value.filter((n) => n.status === "UNREAD").length;
-});
+const unreadNotificationsCount = computed(() => notificationCount.value);
 
 // Methods
 const getRoleBadgeClass = () => {
@@ -395,6 +357,47 @@ const handleLogout = async () => {
   }
 };
 
+// Notification methods
+const loadNotificationCount = async () => {
+  if (!isTeacher.value) return;
+
+  loadingNotificationCount.value = true;
+  try {
+    const response = await getTeacherNotificationCount();
+    if (response.success && response.data) {
+      notificationCount.value = response.data.count;
+    }
+  } catch (error) {
+    console.error("Error loading notification count:", error);
+  } finally {
+    loadingNotificationCount.value = false;
+  }
+};
+
+const handleMarkNotificationRead = async (notificationId: number) => {
+  try {
+    const response = await markNotificationRead(notificationId);
+    if (response.success) {
+      // Decrease notification count
+      notificationCount.value = Math.max(0, notificationCount.value - 1);
+    }
+  } catch (error) {
+    console.error("Error marking notification as read:", error);
+  }
+};
+
+const handleMarkAllNotificationsRead = async () => {
+  try {
+    const response = await markAllNotificationsAsRead();
+    if (response.success) {
+      notificationCount.value = 0;
+    }
+  } catch (error) {
+    console.error("Error marking all notifications as read:", error);
+  }
+};
+
+// Data loading methods
 const loadTeacherData = async () => {
   if (!isTeacher.value) return;
 
@@ -406,11 +409,8 @@ const loadTeacherData = async () => {
       teacherSummary.value = summaryResponse.data;
     }
 
-    // Load notifications
-    const notificationsResponse = await getTeacherNotifications();
-    if (notificationsResponse.success && notificationsResponse.data) {
-      notifications.value = notificationsResponse.data;
-    }
+    // Load notification count (quick load)
+    await loadNotificationCount();
   } catch (error) {
     console.error("Error loading teacher data:", error);
   } finally {
@@ -424,9 +424,9 @@ const loadSchoolData = async () => {
   loadingAttendanceStats.value = true;
   try {
     // Load school attendance stats (available for both Admin and Staff)
-    const attendanceResponse = await getSchoolAttendanceStats();
-    if (attendanceResponse.success && attendanceResponse.data) {
-      schoolAttendanceStats.value = attendanceResponse.data;
+    const statsResponse = await getSchoolAttendanceStats();
+    if (statsResponse.success && statsResponse.data) {
+      schoolAttendanceStats.value = statsResponse.data;
     }
 
     // Load quarter info (Admin only)
@@ -434,10 +434,8 @@ const loadSchoolData = async () => {
       const quarterResponse = await getCurrentQuarterInfo();
       if (quarterResponse.success && quarterResponse.data) {
         quarterInfo.value = quarterResponse.data;
-        if (quarterResponse.data.school_start_time) {
-          schoolStartTimeInput.value =
-            quarterResponse.data.school_start_time.substring(0, 5); // Remove seconds
-        }
+        // Set current school start time in input
+        schoolStartTimeInput.value = quarterResponse.data.school_start_time;
       }
     }
   } catch (error) {
@@ -447,34 +445,7 @@ const loadSchoolData = async () => {
   }
 };
 
-const markNotificationAsRead = async (notificationId: number) => {
-  try {
-    const response = await markNotificationRead(notificationId);
-    if (response.success) {
-      // Update the notification status locally
-      const notification = notifications.value.find(
-        (n) => n.id === notificationId
-      );
-      if (notification) {
-        notification.status = "READ";
-      }
-    }
-  } catch (error) {
-    console.error("Error marking notification as read:", error);
-  }
-};
-
-const formatTime = (time: string | null): string => {
-  if (!time) return "Not set";
-
-  // Convert 24-hour format to 12-hour format with AM/PM
-  const [hours, minutes] = time.split(":");
-  const hour12 = parseInt(hours) % 12 || 12;
-  const ampm = parseInt(hours) >= 12 ? "PM" : "AM";
-
-  return `${hour12}:${minutes} ${ampm}`;
-};
-
+// Admin functionality
 const updateStartTime = async () => {
   if (!schoolStartTimeInput.value) return;
 
@@ -482,48 +453,41 @@ const updateStartTime = async () => {
   startTimeUpdateMessage.value = null;
 
   try {
-    // Convert time input to HH:MM:SS format
-    const timeWithSeconds = schoolStartTimeInput.value + ":00";
-
-    const response = await updateSchoolStartTime(timeWithSeconds);
+    const response = await updateSchoolStartTime(schoolStartTimeInput.value);
 
     if (response.success) {
       startTimeUpdateMessage.value = {
         type: "success",
         text: "School start time updated successfully!",
       };
-
-      await loadSchoolData();
     } else {
       startTimeUpdateMessage.value = {
         type: "error",
         text: response.error || "Failed to update school start time",
       };
     }
-  } catch (error) {
+  } catch (error: any) {
     console.error("Error updating school start time:", error);
     startTimeUpdateMessage.value = {
       type: "error",
-      text: "An unexpected error occurred",
+      text: error.message || "Failed to update school start time",
     };
   } finally {
     updatingStartTime.value = false;
 
-    // Clear message after 3 seconds
+    // Clear message after 5 seconds
     setTimeout(() => {
       startTimeUpdateMessage.value = null;
-    }, 3000);
+    }, 5000);
   }
 };
 
 // Lifecycle
-onMounted(() => {
+onMounted(async () => {
   if (isTeacher.value) {
-    loadTeacherData();
-  }
-
-  if (isAdmin.value || isStaff.value) {
-    loadSchoolData();
+    await loadTeacherData();
+  } else if (isAdmin.value || isStaff.value) {
+    await loadSchoolData();
   }
 });
 </script>

@@ -119,26 +119,53 @@ export class DashboardService {
    * Get teacher's notifications
    */
   static async getTeacherNotifications(
-    teacher: Teacher
-  ): Promise<TeacherNotification[]> {
+    teacher: Teacher,
+    page: number = 1,
+    limit: number = 10
+  ): Promise<{
+    notifications: TeacherNotification[];
+    pagination: {
+      current_page: number;
+      total_pages: number;
+      total_records: number;
+      per_page: number;
+    };
+  }> {
     try {
       // First, check and create new notifications
       await this.check70MinuteNotifications(teacher.auth_id);
       await this.checkConsecutiveAbsenceNotifications(teacher);
 
-      // Then fetch all existing notifications for today
-      const today = new Date().toISOString().split("T")[0];
+      // Get total count
+      const { count: totalCount } = await supabase
+        .from("notifications")
+        .select("id", { count: "exact" })
+        .eq("teacher_id", teacher.auth_id);
+
+      const totalRecords = totalCount || 0;
+      const totalPages = Math.ceil(totalRecords / limit);
+      const offset = (page - 1) * limit;
 
       const { data: notifications } = await supabase
         .from("notifications")
         .select("id, student_id, type, message, sent_at, status")
         .eq("teacher_id", teacher.auth_id)
-        .gte("sent_at", `${today}T00:00:00`)
-        .order("sent_at", { ascending: false });
+        .order("sent_at", { ascending: false })
+        .range(offset, offset + limit - 1);
 
-      if (!notifications) return [];
+      if (!notifications) {
+        return {
+          notifications: [],
+          pagination: {
+            current_page: page,
+            total_pages: 0,
+            total_records: 0,
+            per_page: limit,
+          },
+        };
+      }
 
-      // Get student details separately
+      // Get student details for each notification
       const result: TeacherNotification[] = [];
 
       for (const notification of notifications) {
@@ -177,7 +204,15 @@ export class DashboardService {
         }
       }
 
-      return result;
+      return {
+        notifications: result,
+        pagination: {
+          current_page: page,
+          total_pages: totalPages,
+          total_records: totalRecords,
+          per_page: limit,
+        },
+      };
     } catch (error: any) {
       throw new Error(`Failed to get teacher notifications: ${error.message}`);
     }
@@ -360,7 +395,7 @@ export class DashboardService {
       const { error } = await supabase
         .from("notifications")
         .update({
-          status: "READ",
+          status: "Read",
           updated_at: new Date().toISOString(),
         })
         .eq("id", notificationId)
@@ -1109,5 +1144,56 @@ export class DashboardService {
     }
 
     return schoolDays;
+  }
+
+  // backend/src/services/dashboardService.ts
+
+  /**
+   * Get unread notification count for teacher - NEW METHOD
+   */
+  static async getTeacherUnreadNotificationCount(
+    teacher: Teacher
+  ): Promise<number> {
+    try {
+      // First, check and create new notifications
+      await this.check70MinuteNotifications(teacher.auth_id);
+      await this.checkConsecutiveAbsenceNotifications(teacher);
+
+      // Get count of unread notifications
+      const { data, error, count } = await supabase
+        .from("notifications")
+        .select("id", { count: "exact" })
+        .eq("teacher_id", teacher.auth_id)
+        .neq("status", "Read");
+
+      if (error) throw error;
+
+      return count || 0;
+    } catch (error: any) {
+      console.error("Error getting unread notification count:", error);
+      return 0;
+    }
+  }
+
+  /**
+   * Mark all notifications as read for teacher - NEW METHOD
+   */
+  static async markAllNotificationsAsRead(teacherId: string): Promise<void> {
+    try {
+      const { error } = await supabase
+        .from("notifications")
+        .update({
+          status: "Read",
+          updated_at: new Date().toISOString(),
+        })
+        .eq("teacher_id", teacherId)
+        .neq("status", "Read"); // Only update unread notifications
+
+      if (error) throw error;
+    } catch (error: any) {
+      throw new Error(
+        `Failed to mark all notifications as read: ${error.message}`
+      );
+    }
   }
 }

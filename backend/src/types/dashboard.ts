@@ -147,3 +147,17 @@ export interface CurrentQuarter {
   end_date: string;
   school_start_time: string;
 }
+
+export interface NotificationsPaginatedResponse {
+  notifications: TeacherNotification[];
+  pagination: {
+    current_page: number;
+    total_pages: number;
+    total_records: number;
+    per_page: number;
+  };
+}
+
+export interface NotificationCountResponse {
+  count: number;
+}

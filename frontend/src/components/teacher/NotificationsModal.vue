@@ -1,10 +1,11 @@
+<!-- frontend/src/components/teacher/NotificationsModal.vue -->
 <template>
   <div
     class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50"
     @click="$emit('close')"
   >
     <div
-      class="relative top-20 mx-auto p-5 border w-11/12 md:w-2/3 lg:w-1/2 shadow-lg rounded-md bg-white"
+      class="relative top-20 mx-auto p-5 border w-11/12 md:w-2/3 lg:w-1/2 shadow-lg rounded-md bg-white max-h-[80vh] flex flex-col"
       @click.stop
     >
       <!-- Header -->
@@ -28,9 +29,34 @@
       </div>
 
       <!-- Content -->
-      <div class="max-h-96 overflow-y-auto">
+      <div class="flex-1 overflow-y-auto">
+        <!-- Loading Skeleton -->
+        <div v-if="loading" class="space-y-3">
+          <div
+            v-for="i in 5"
+            :key="`skeleton-${i}`"
+            class="border rounded-lg p-4 animate-pulse"
+          >
+            <div class="flex items-start justify-between mb-2">
+              <div class="flex items-center flex-1">
+                <div class="w-6 h-6 bg-gray-300 rounded-full mr-3"></div>
+                <div>
+                  <div class="h-4 bg-gray-300 rounded w-32 mb-1"></div>
+                  <div class="h-3 bg-gray-300 rounded w-20"></div>
+                </div>
+              </div>
+              <div class="h-6 bg-gray-300 rounded w-20"></div>
+            </div>
+            <div class="h-4 bg-gray-300 rounded w-full mb-2"></div>
+            <div class="h-3 bg-gray-300 rounded w-24"></div>
+          </div>
+        </div>
+
         <!-- Empty State -->
-        <div v-if="notifications.length === 0" class="text-center py-12">
+        <div
+          v-else-if="notifications.length === 0 && !loading"
+          class="text-center py-12"
+        >
           <BellIcon class="h-12 w-12 text-gray-300 mx-auto mb-4" />
           <h4 class="text-lg font-medium text-gray-500 mb-2">
             No notifications
@@ -44,7 +70,7 @@
         <div v-else class="space-y-3">
           <div
             v-for="notification in notifications"
-            :key="`notification-${notification.id}-${notification.status}`"
+            :key="`notification-${notification.id}`"
             class="border rounded-lg p-4 hover:bg-gray-50 transition-colors cursor-pointer"
             :class="{
               'border-blue-200 bg-blue-50': notification.status === 'UNREAD',
@@ -96,13 +122,6 @@
               class="text-xs text-gray-500 mb-3"
             >
               <div
-                v-if="notification.metadata.late_minutes"
-                class="inline-flex items-center mr-4"
-              >
-                <ClockIcon class="h-3 w-3 mr-1" />
-                {{ notification.metadata.late_minutes }} minutes late
-              </div>
-              <div
                 v-if="notification.metadata.total_late_minutes"
                 class="inline-flex items-center mr-4"
               >
@@ -125,7 +144,7 @@
                 {{ formatTimestamp(notification.sent_at) }}
               </span>
               <button
-                v-if="notification.status === 'UNREAD' && notification.id > 0"
+                v-if="notification.status === 'UNREAD'"
                 @click.stop="markAsRead(notification)"
                 class="text-xs text-blue-600 hover:text-blue-800 font-medium"
                 :disabled="markingAsRead === notification.id"
@@ -139,10 +158,21 @@
             </div>
           </div>
         </div>
+
+        <!-- Load More Button -->
+        <div v-if="hasMorePages && !loading" class="mt-4 text-center">
+          <button
+            @click="loadMoreNotifications"
+            :disabled="loadingMore"
+            class="btn-secondary"
+          >
+            {{ loadingMore ? "Loading..." : "Load More" }}
+          </button>
+        </div>
       </div>
 
       <!-- Actions -->
-      <div class="mt-6 flex justify-between items-center">
+      <div class="mt-6 pt-4 border-t flex justify-between items-center">
         <button
           v-if="unreadCount > 0"
           @click="markAllAsRead"
@@ -160,7 +190,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from "vue";
+import { computed, ref, onMounted } from "vue";
 import {
   XMarkIcon,
   BellIcon,
@@ -170,36 +200,126 @@ import {
   UserMinusIcon,
   ExclamationCircleIcon,
 } from "@heroicons/vue/24/outline";
-import type { TeacherNotification } from "@/composables/useDashboardApi";
-
-// Props
-interface Props {
-  notifications: TeacherNotification[];
-}
-
-const props = defineProps<Props>();
+import { useDashboardApi } from "@/composables/useDashboardApi";
+import type { TeacherNotification } from "@/types/dashboard";
 
 // Emits
 interface Emits {
   close: [];
   markRead: [notificationId: number];
+  markAllRead: [];
 }
 
 const emit = defineEmits<Emits>();
 
-// Local state
+// Composables
+const { getTeacherNotificationsPaginated, markNotificationAsRead } =
+  useDashboardApi();
+
+// Reactive state
+const notifications = ref<TeacherNotification[]>([]);
+const loading = ref(true);
+const loadingMore = ref(false);
 const markingAsRead = ref(0);
+const currentPage = ref(1);
+const totalPages = ref(0);
+const hasMorePages = computed(() => currentPage.value < totalPages.value);
 
 // Computed
 const unreadCount = computed(() => {
-  return props.notifications.filter((n) => n.status === "UNREAD").length;
+  return notifications.value.filter((n) => n.status === "UNREAD").length;
 });
 
 // Methods
+const loadNotifications = async (page: number = 1, append: boolean = false) => {
+  try {
+    if (page === 1) {
+      loading.value = true;
+    } else {
+      loadingMore.value = true;
+    }
+
+    const response = await getTeacherNotificationsPaginated(page, 10);
+
+    if (response.success && response.data) {
+      if (append) {
+        notifications.value.push(...response.data.notifications);
+      } else {
+        notifications.value = response.data.notifications;
+      }
+
+      currentPage.value = response.data.pagination.current_page;
+      totalPages.value = response.data.pagination.total_pages;
+    }
+  } catch (error) {
+    console.error("Error loading notifications:", error);
+  } finally {
+    loading.value = false;
+    loadingMore.value = false;
+  }
+};
+
+const loadMoreNotifications = async () => {
+  if (hasMorePages.value && !loadingMore.value) {
+    await loadNotifications(currentPage.value + 1, true);
+  }
+};
+
+const handleNotificationClick = (notification: TeacherNotification) => {
+  if (notification.status === "UNREAD") {
+    markAsRead(notification);
+  }
+};
+
+const markAsRead = async (notification: TeacherNotification) => {
+  if (markingAsRead.value === notification.id) return;
+
+  markingAsRead.value = notification.id;
+  try {
+    const response = await markNotificationAsRead(notification.id);
+    if (response.success) {
+      // Update local state
+      const index = notifications.value.findIndex(
+        (n) => n.id === notification.id
+      );
+      if (index !== -1) {
+        notifications.value[index].status = "READ";
+      }
+      emit("markRead", notification.id);
+    }
+  } catch (error) {
+    console.error("Error marking notification as read:", error);
+  } finally {
+    setTimeout(() => {
+      markingAsRead.value = 0;
+    }, 500);
+  }
+};
+
+const markAllAsRead = async () => {
+  if (markingAsRead.value > 0) return;
+
+  markingAsRead.value = -1;
+  try {
+    emit("markAllRead");
+    // Update local state
+    notifications.value.forEach((notification) => {
+      if (notification.status === "UNREAD") {
+        notification.status = "READ";
+      }
+    });
+  } catch (error) {
+    console.error("Error marking all notifications as read:", error);
+  } finally {
+    setTimeout(() => {
+      markingAsRead.value = 0;
+    }, 500);
+  }
+};
+
+// Icon and styling methods (keep your existing ones)
 const getNotificationIcon = (type: string) => {
   switch (type) {
-    case "LATE_TODAY":
-      return ClockIcon;
     case "EXCEEDED_70_MINUTES":
       return ExclamationTriangleIcon;
     case "CONSECUTIVE_ABSENCE":
@@ -211,8 +331,6 @@ const getNotificationIcon = (type: string) => {
 
 const getNotificationIconClass = (type: string) => {
   switch (type) {
-    case "LATE_TODAY":
-      return "text-orange-500";
     case "EXCEEDED_70_MINUTES":
       return "text-red-500";
     case "CONSECUTIVE_ABSENCE":
@@ -224,8 +342,6 @@ const getNotificationIconClass = (type: string) => {
 
 const getTypeBadgeClass = (type: string) => {
   switch (type) {
-    case "LATE_TODAY":
-      return "bg-orange-100 text-orange-800";
     case "EXCEEDED_70_MINUTES":
       return "bg-red-100 text-red-800";
     case "CONSECUTIVE_ABSENCE":
@@ -237,8 +353,6 @@ const getTypeBadgeClass = (type: string) => {
 
 const getTypeLabel = (type: string) => {
   switch (type) {
-    case "LATE_TODAY":
-      return "Late Today";
     case "EXCEEDED_70_MINUTES":
       return "70 Min Exceeded";
     case "CONSECUTIVE_ABSENCE":
@@ -260,7 +374,6 @@ const formatTimestamp = (timestamp: Date | string) => {
   } else if (diffInMinutes < 60) {
     return `${diffInMinutes}m ago`;
   } else if (diffInMinutes < 1440) {
-    // 24 hours
     const hours = Math.floor(diffInMinutes / 60);
     return `${hours}h ago`;
   } else {
@@ -273,48 +386,8 @@ const formatTimestamp = (timestamp: Date | string) => {
   }
 };
 
-const handleNotificationClick = (notification: TeacherNotification) => {
-  if (notification.status === "UNREAD" && notification.id > 0) {
-    markAsRead(notification);
-  }
-};
-
-const markAsRead = async (notification: TeacherNotification) => {
-  if (notification.id <= 0 || markingAsRead.value === notification.id) return;
-
-  markingAsRead.value = notification.id;
-  try {
-    emit("markRead", notification.id);
-  } catch (error) {
-    console.error("Error marking notification as read:", error);
-  } finally {
-    setTimeout(() => {
-      markingAsRead.value = 0;
-    }, 500);
-  }
-};
-
-const markAllAsRead = async () => {
-  const unreadNotifications = props.notifications.filter(
-    (n) => n.status === "UNREAD" && n.id > 0
-  );
-
-  for (const notification of unreadNotifications) {
-    if (markingAsRead.value === 0) {
-      markingAsRead.value = -1; // Use -1 to indicate bulk operation
-      try {
-        emit("markRead", notification.id);
-        // Add a small delay between requests to prevent overwhelming the server
-        await new Promise((resolve) => setTimeout(resolve, 100));
-      } catch (error) {
-        console.error("Error marking notification as read:", error);
-        break;
-      }
-    }
-  }
-
-  setTimeout(() => {
-    markingAsRead.value = 0;
-  }, 500);
-};
+// Load notifications on mount
+onMounted(() => {
+  loadNotifications();
+});
 </script>
