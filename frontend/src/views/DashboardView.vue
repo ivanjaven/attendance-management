@@ -262,6 +262,28 @@
             </div>
           </div>
         </div>
+
+        <!-- Admin-only QR Generator Section -->
+        <div v-if="isAdmin" class="mb-8">
+          <div class="card">
+            <div class="flex items-center mb-6">
+              <div
+                class="flex items-center justify-center w-12 h-12 bg-primary-100 rounded-lg"
+              >
+                <QrCodeIcon class="h-6 w-6 text-primary-600" />
+              </div>
+              <div class="ml-4">
+                <h3 class="text-xl font-semibold text-gray-900">
+                  QR Code Generator
+                </h3>
+                <p class="text-gray-600">
+                  Generate and manage student ID QR codes
+                </p>
+              </div>
+            </div>
+            <QRGenerator />
+          </div>
+        </div>
       </div>
     </main>
 
@@ -281,6 +303,7 @@ import { useRouter } from "vue-router";
 import { useAuthStore } from "@/stores/auth";
 import NotificationsModal from "@/components/teacher/NotificationsModal.vue";
 import SkeletonLoader from "@/components/common/SkeletonLoader.vue";
+import QRGenerator from "@/components/admin/QRGenerator.vue";
 import {
   QrCodeIcon,
   UsersIcon,
@@ -502,6 +525,7 @@ const updateStartTime = async () => {
     }, 3000);
   }
 };
+
 // Lifecycle
 onMounted(async () => {
   if (isTeacher.value) {
