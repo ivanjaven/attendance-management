@@ -222,6 +222,10 @@ export class DashboardService {
    * Get all students in advisory class with their attendance status
    * This will show ALL students including absent ones
    */
+  /**
+   * Get all students in advisory class with their attendance status
+   * Only shows records for actual school days from school_calendar
+   */
   static async getStudentRecords(
     teacher: Teacher,
     filters: StudentRecordsFilter
@@ -277,6 +281,38 @@ export class DashboardService {
       const dateFrom = filters.date_from || today;
       const dateTo = filters.date_to || today;
 
+      // Get only school days from school_calendar
+      const { data: schoolDays, error: calendarError } = await supabase
+        .from("school_calendar")
+        .select("calendar_date")
+        .gte("calendar_date", dateFrom)
+        .lte("calendar_date", dateTo)
+        .eq("is_school_day", true)
+        .order("calendar_date");
+
+      if (calendarError) {
+        throw new Error("Failed to fetch school calendar");
+      }
+
+      // If no school calendar data, fall back to weekdays only
+      const validDates = schoolDays?.map((day) => day.calendar_date) || [];
+      if (validDates.length === 0) {
+        // Fallback: generate weekdays only
+        const fallbackDates = [];
+        for (
+          let date = new Date(dateFrom);
+          date <= new Date(dateTo);
+          date.setDate(date.getDate() + 1)
+        ) {
+          const dayOfWeek = date.getDay();
+          if (dayOfWeek >= 1 && dayOfWeek <= 5) {
+            // Monday-Friday
+            fallbackDates.push(date.toISOString().split("T")[0]);
+          }
+        }
+        validDates.push(...fallbackDates);
+      }
+
       // Get all attendance records for these students in the date range
       const studentIds = allStudents.map((s) => s.id);
       const { data: attendanceRecords } = await supabase
@@ -296,10 +332,8 @@ export class DashboardService {
         attendanceMap.set(key, record);
       });
 
-      // Generate all date-student combinations
+      // Generate records for ONLY school days
       const allRecords: StudentRecord[] = [];
-      const startDate = new Date(dateFrom);
-      const endDate = new Date(dateTo);
 
       for (const student of allStudents) {
         const studentName = [
@@ -310,13 +344,8 @@ export class DashboardService {
           .filter(Boolean)
           .join(" ");
 
-        // Generate records for each date in the range
-        for (
-          let date = new Date(startDate);
-          date <= endDate;
-          date.setDate(date.getDate() + 1)
-        ) {
-          const dateStr = date.toISOString().split("T")[0];
+        // Only loop through valid school days
+        for (const dateStr of validDates) {
           const attendanceKey = `${student.id}-${dateStr}`;
           const attendanceRecord = attendanceMap.get(attendanceKey);
 
@@ -328,19 +357,16 @@ export class DashboardService {
           let recordId = 0;
 
           if (attendanceRecord) {
-            recordId = Date.now() + Math.random(); // Generate unique ID
+            recordId = Date.now() + Math.random();
             timeIn = attendanceRecord.time_in;
             timeOut = attendanceRecord.time_out;
             isLate = attendanceRecord.is_late;
             lateMinutes = attendanceRecord.late_minutes || 0;
             status = isLate ? "LATE" : "PRESENT";
-          } else {
-            // Create a unique ID for absent records
-            recordId = Date.now() + Math.random();
           }
 
           allRecords.push({
-            id: recordId,
+            id: recordId || Date.now() + Math.random(),
             student_name: studentName,
             student_id: student.student_id,
             attendance_date: new Date(dateStr),
@@ -348,26 +374,16 @@ export class DashboardService {
             time_out: timeOut,
             is_late: isLate,
             late_minutes: lateMinutes,
-            status: status,
+            status,
           });
         }
       }
 
-      // Sort records by date (newest first) then by student name
-      allRecords.sort((a, b) => {
-        const dateCompare =
-          new Date(b.attendance_date).getTime() -
-          new Date(a.attendance_date).getTime();
-        if (dateCompare !== 0) return dateCompare;
-        return a.student_name.localeCompare(b.student_name);
-      });
-
-      // Apply pagination to the final records
-      const totalRecords = allRecords.length;
       const startIndex = (filters.page - 1) * filters.limit;
       const endIndex = startIndex + filters.limit;
       const paginatedRecords = allRecords.slice(startIndex, endIndex);
 
+      const totalRecords = allRecords.length;
       const totalPages = Math.ceil(totalRecords / filters.limit);
 
       return {
@@ -757,11 +773,10 @@ export class DashboardService {
       attendance?.reduce((sum, a) => sum + a.late_minutes, 0) || 0;
 
     // Calculate school days in quarter (simple weekday count)
-    const quarterSchoolDays = this.calculateSchoolDaysInPeriod(
+    const quarterSchoolDays = await this.calculateSchoolDaysInPeriod(
       currentQuarter.start_date,
       currentQuarter.end_date
     );
-
     const absentDays = Math.max(0, quarterSchoolDays - presentDays);
     const attendancePercentage =
       quarterSchoolDays > 0
@@ -967,7 +982,34 @@ export class DashboardService {
     return count || 0;
   }
 
-  private static calculateSchoolDaysInPeriod(
+  private static async calculateSchoolDaysInPeriod(
+    startDate: string,
+    endDate: string
+  ): Promise<number> {
+    // First, get school calendar data for the period
+    const { data: calendarDays, error } = await supabase
+      .from("school_calendar")
+      .select("calendar_date, is_school_day")
+      .gte("calendar_date", startDate)
+      .lte("calendar_date", endDate);
+
+    if (error) {
+      console.error("Error fetching school calendar:", error);
+      // Fallback to old method if school_calendar fails
+      return this.calculateSchoolDaysInPeriodFallback(startDate, endDate);
+    }
+
+    if (!calendarDays || calendarDays.length === 0) {
+      // If no calendar data exists, fall back to weekday-only calculation
+      return this.calculateSchoolDaysInPeriodFallback(startDate, endDate);
+    }
+
+    // Count only days marked as school days in the calendar
+    return calendarDays.filter((day) => day.is_school_day).length;
+  }
+
+  // Keep the old method as fallback
+  private static calculateSchoolDaysInPeriodFallback(
     startDate: string,
     endDate: string
   ): number {
