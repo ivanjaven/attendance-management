@@ -27,17 +27,17 @@
     <!-- Stats -->
     <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
       <div class="card-compact">
-        <h4 class="text-sm font-medium text-gray-500">Total Students</h4>
+        <h4 class="text-sm font-medium text-gray-600">Total Students</h4>
         <p class="text-2xl font-bold text-gray-900">{{ students.length }}</p>
       </div>
       <div class="card-compact">
-        <h4 class="text-sm font-medium text-gray-500">Selected</h4>
+        <h4 class="text-sm font-medium text-gray-600">Selected</h4>
         <p class="text-2xl font-bold text-primary-600">
           {{ selectedStudents.length }}
         </p>
       </div>
       <div class="card-compact">
-        <h4 class="text-sm font-medium text-gray-500">Generated</h4>
+        <h4 class="text-sm font-medium text-gray-600">Generated</h4>
         <p class="text-2xl font-bold text-green-600">
           {{ generatedQRCodes.length }}
         </p>
@@ -145,22 +145,22 @@
                 />
               </th>
               <th
-                class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                class="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider"
               >
                 Student ID
               </th>
               <th
-                class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                class="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider"
               >
                 Name
               </th>
               <th
-                class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                class="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider"
               >
                 Level
               </th>
               <th
-                class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                class="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider"
               >
                 Actions
               </th>
@@ -188,7 +188,7 @@
               <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                 {{ getFullName(student) }}
               </td>
-              <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+              <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
                 Grade {{ student.level || student.level_id }}
               </td>
               <td

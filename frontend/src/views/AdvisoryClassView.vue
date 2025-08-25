@@ -156,7 +156,7 @@
                   @input="debouncedSearch"
                 />
                 <MagnifyingGlassIcon
-                  class="absolute left-3 top-2.5 h-5 w-5 text-gray-400"
+                  class="absolute left-3 top-2.5 h-5 w-5 text-gray-600"
                 />
               </div>
               <!-- Date Filter -->
@@ -224,32 +224,32 @@
             <thead class="bg-gray-50">
               <tr>
                 <th
-                  class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                  class="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider"
                 >
                   Student
                 </th>
                 <th
-                  class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                  class="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider"
                 >
                   Date
                 </th>
                 <th
-                  class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                  class="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider"
                 >
                   Time In
                 </th>
                 <th
-                  class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                  class="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider"
                 >
                   Time Out
                 </th>
                 <th
-                  class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                  class="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider"
                 >
                   Status
                 </th>
                 <th
-                  class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                  class="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider"
                 >
                   Late Minutes
                 </th>

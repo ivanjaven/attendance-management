@@ -76,7 +76,7 @@
                 {{ schoolAttendanceStats?.present_today ?? 0 }}
               </p>
               <SkeletonLoader v-else width="3rem" height="2rem" class="mt-1" />
-              <p class="text-sm text-gray-500">Students present</p>
+              <p class="text-sm text-gray-600">Students present</p>
             </div>
 
             <div class="card-compact">
@@ -90,7 +90,7 @@
                 {{ schoolAttendanceStats?.late_today ?? 0 }}
               </p>
               <SkeletonLoader v-else width="3rem" height="2rem" class="mt-1" />
-              <p class="text-sm text-gray-500">Late arrivals</p>
+              <p class="text-sm text-gray-600">Late arrivals</p>
             </div>
 
             <div class="card-compact">
@@ -104,7 +104,7 @@
                 {{ schoolAttendanceStats?.absent_today ?? 0 }}
               </p>
               <SkeletonLoader v-else width="3rem" height="2rem" class="mt-1" />
-              <p class="text-sm text-gray-500">Not present</p>
+              <p class="text-sm text-gray-600">Not present</p>
             </div>
           </template>
 
@@ -122,7 +122,7 @@
                 {{ teacherSummary?.present_today ?? 0 }}
               </p>
               <SkeletonLoader v-else width="3rem" height="2rem" class="mt-1" />
-              <p class="text-sm text-gray-500">
+              <p class="text-sm text-gray-600">
                 out of {{ teacherSummary?.total_students ?? 0 }}
               </p>
             </div>
@@ -135,7 +135,7 @@
               <p class="text-3xl font-bold text-red-600">
                 {{ teacherSummary?.absent_today ?? 0 }}
               </p>
-              <p class="text-sm text-gray-500">Students absent</p>
+              <p class="text-sm text-gray-600">Students absent</p>
             </div>
 
             <!-- Late Students Card -->
@@ -146,7 +146,7 @@
               <p class="text-3xl font-bold text-orange-600">
                 {{ teacherSummary?.late_today ?? 0 }}
               </p>
-              <p class="text-sm text-gray-500">Students late</p>
+              <p class="text-sm text-gray-600">Students late</p>
             </div>
 
             <!-- Total Students Card -->
@@ -157,7 +157,7 @@
               <p class="text-3xl font-bold text-gray-800">
                 {{ teacherSummary?.total_students ?? 0 }}
               </p>
-              <p class="text-sm text-gray-500">In advisory class</p>
+              <p class="text-sm text-gray-600">In advisory class</p>
             </div>
 
             <!-- Attendance Percentage Card -->
@@ -168,7 +168,7 @@
               <p class="text-3xl font-bold text-primary-600">
                 {{ (teacherSummary?.attendance_percentage ?? 0).toFixed(1) }}%
               </p>
-              <p class="text-sm text-gray-500">Today's attendance</p>
+              <p class="text-sm text-gray-600">Today's attendance</p>
             </div>
 
             <!-- Advisory Class Info -->
@@ -181,7 +181,7 @@
                   teacherSummary?.advisory_class ?? "No Advisory Class Assigned"
                 }}
               </p>
-              <p class="text-sm text-gray-500">Your assigned advisory class</p>
+              <p class="text-sm text-gray-600">Your assigned advisory class</p>
             </div>
           </template>
         </div>
