@@ -453,13 +453,34 @@ const updateStartTime = async () => {
   startTimeUpdateMessage.value = null;
 
   try {
-    const response = await updateSchoolStartTime(schoolStartTimeInput.value);
+    // Ensure proper HH:MM:SS format with validation
+    let timeWithSeconds = schoolStartTimeInput.value.trim();
+
+    // Check if it's already in HH:MM:SS format or just HH:MM
+    const timeParts = timeWithSeconds.split(":");
+    if (timeParts.length === 2) {
+      timeWithSeconds = timeWithSeconds + ":00";
+    } else if (timeParts.length !== 3) {
+      throw new Error("Invalid time format");
+    }
+
+    // Validate the final format before sending
+    const timeRegex = /^([01]?[0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9]$/;
+    if (!timeRegex.test(timeWithSeconds)) {
+      throw new Error("Invalid time format. Please use valid time (HH:MM)");
+    }
+
+    console.log("Sending time format:", timeWithSeconds); // Debug log
+
+    const response = await updateSchoolStartTime(timeWithSeconds);
 
     if (response.success) {
       startTimeUpdateMessage.value = {
         type: "success",
         text: "School start time updated successfully!",
       };
+
+      await loadSchoolData();
     } else {
       startTimeUpdateMessage.value = {
         type: "error",
@@ -470,18 +491,17 @@ const updateStartTime = async () => {
     console.error("Error updating school start time:", error);
     startTimeUpdateMessage.value = {
       type: "error",
-      text: error.message || "Failed to update school start time",
+      text: error.message || "An unexpected error occurred",
     };
   } finally {
     updatingStartTime.value = false;
 
-    // Clear message after 5 seconds
+    // Clear message after 3 seconds
     setTimeout(() => {
       startTimeUpdateMessage.value = null;
-    }, 5000);
+    }, 3000);
   }
 };
-
 // Lifecycle
 onMounted(async () => {
   if (isTeacher.value) {

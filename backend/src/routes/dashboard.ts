@@ -239,7 +239,7 @@ router.put(
   requireAdmin,
   async (req: Request, res: Response): Promise<void> => {
     try {
-      const { school_start_time } = req.body;
+      let { school_start_time } = req.body;
 
       if (!school_start_time) {
         res.status(400).json({
@@ -249,15 +249,50 @@ router.put(
         return;
       }
 
+      // Normalize time format - accept both HH:MM and HH:MM:SS
+      school_start_time = school_start_time.trim();
+      const timeParts = school_start_time.split(":");
+
+      if (timeParts.length === 2) {
+        school_start_time += ":00";
+      } else if (timeParts.length !== 3) {
+        res.status(400).json({
+          success: false,
+          error: "Invalid time format. Use HH:MM or HH:MM:SS",
+        });
+        return;
+      }
+
       // Validate time format (HH:MM:SS)
       const timeRegex = /^([01]?[0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9]$/;
       if (!timeRegex.test(school_start_time)) {
         res.status(400).json({
           success: false,
-          error: "Invalid time format. Use HH:MM:SS",
+          error: "Invalid time format. Use HH:MM:SS (e.g., 08:00:00)",
         });
         return;
       }
+
+      // Additional validation for realistic time values
+      const [hours, minutes, seconds] = school_start_time
+        .split(":")
+        .map(Number);
+      if (
+        hours < 0 ||
+        hours > 23 ||
+        minutes < 0 ||
+        minutes > 59 ||
+        seconds < 0 ||
+        seconds > 59
+      ) {
+        res.status(400).json({
+          success: false,
+          error: "Invalid time values. Hours: 0-23, Minutes/Seconds: 0-59",
+        });
+        return;
+      }
+
+      console.log("Processed school_start_time:", school_start_time); // Debug log
 
       await DashboardService.updateSchoolStartTime(school_start_time);
 

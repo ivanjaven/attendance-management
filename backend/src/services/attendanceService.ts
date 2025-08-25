@@ -337,7 +337,12 @@ export class AttendanceService {
   ): boolean {
     const arrival = new Date(`1970-01-01T${arrivalTime}`);
     const schoolStart = new Date(`1970-01-01T${schoolStartTime}`);
-    return arrival > schoolStart;
+
+    // Add 1-minute grace period (60,000 milliseconds) Can be change
+    const graceTimeMs = 60 * 1000;
+    const schoolStartWithGrace = new Date(schoolStart.getTime() + graceTimeMs);
+
+    return arrival > schoolStartWithGrace;
   }
 
   private static calculateLateMinutes(
@@ -346,7 +351,12 @@ export class AttendanceService {
   ): number {
     const arrival = new Date(`1970-01-01T${arrivalTime}`);
     const schoolStart = new Date(`1970-01-01T${schoolStartTime}`);
-    const diffMs = arrival.getTime() - schoolStart.getTime();
+
+    // Add 1-minute grace period
+    const graceTimeMs = 60 * 1000;
+    const schoolStartWithGrace = new Date(schoolStart.getTime() + graceTimeMs);
+
+    const diffMs = arrival.getTime() - schoolStartWithGrace.getTime();
     return Math.max(0, Math.floor(diffMs / (1000 * 60)));
   }
 

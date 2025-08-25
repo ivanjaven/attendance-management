@@ -116,6 +116,15 @@ export const useDashboardApi = () => {
   const updateSchoolStartTime = async (
     schoolStartTime: string
   ): Promise<ApiResponse<void>> => {
+    // Additional client-side validation before sending
+    const timeRegex = /^([01]?[0-9]|2[0-3]):[0-5][0-9](:[0-5][0-9])?$/;
+    if (!timeRegex.test(schoolStartTime)) {
+      return {
+        success: false,
+        error: "Invalid time format. Please use HH:MM format.",
+      };
+    }
+
     return handleApiCall(() =>
       api.put("/dashboard/admin/school-start-time", {
         school_start_time: schoolStartTime,
