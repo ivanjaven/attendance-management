@@ -142,7 +142,7 @@ export class SMSTemplateService {
 
     if (remaining <= this.criticalThreshold) {
       // Critical warning
-      message += `⚠️ WARNING: Only ${remaining} min remaining!`;
+      message += `WARNING: Only ${remaining} min remaining!`;
       messageType = SMSMessageType.TIME_IN_LATE_CRITICAL;
     } else if (remaining <= this.moderateThreshold) {
       // Moderate warning
