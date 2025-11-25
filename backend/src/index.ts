@@ -3,12 +3,16 @@ import cors from "cors";
 import helmet from "helmet";
 import morgan from "morgan";
 import dotenv from "dotenv";
-import { testConnection } from "./config/database";
+import { testConnection, supabase } from "./config/database";
 
 import { authRoutes } from "./routes/auth";
 import { attendanceRoutes } from "./routes/attendance";
 import { adminRoutes } from "./routes/admin";
 import { dashboardRoutes } from "./routes/dashboard";
+
+// SMS Integration imports
+import { initializeSMSEventHandler } from "./services/SMSEventHandler";
+import { validateSMSConfig } from "./config/sms.config";
 
 // Load environment variables FIRST
 dotenv.config();
@@ -76,10 +80,47 @@ app.use("*", (req, res) => {
   });
 });
 
-// Start server with database connection test
+// Start server with database connection test and SMS initialization
 app.listen(PORT, async () => {
+  console.log("=".repeat(80));
   console.log(`🚀 Backend server running on http://localhost:${PORT}`);
   console.log(`📊 Health check: http://localhost:${PORT}/api/health`);
+  console.log(`🌍 Timezone: ${process.env.TZ || "UTC"}`);
+  console.log("=".repeat(80));
+
+  // Test database connection
   console.log("🔌 Testing database connection...");
-  await testConnection();
+  const dbConnected = await testConnection();
+
+  if (!dbConnected) {
+    console.error("⚠️  Server started but database connection failed!");
+  }
+
+  console.log("=".repeat(80));
+
+  // Initialize SMS Event Handler
+  try {
+    console.log("📱 Initializing SMS Event Handler...");
+
+    // Validate SMS configuration
+    const smsConfigValid = validateSMSConfig();
+
+    if (smsConfigValid) {
+      // Initialize the event handler with Supabase client
+      const smsHandler = initializeSMSEventHandler(supabase);
+      console.log("✅ SMS Event Handler initialized successfully");
+      console.log(`📋 SMS Status:`, smsHandler.getStatus());
+    } else {
+      console.log(
+        "⚠️  SMS Event Handler not initialized (configuration invalid or disabled)"
+      );
+    }
+  } catch (error) {
+    console.error("❌ Failed to initialize SMS Event Handler:", error);
+    console.log("⚠️  Server will continue without SMS functionality");
+  }
+
+  console.log("=".repeat(80));
+  console.log("✅ Server initialization complete!");
+  console.log("=".repeat(80));
 });

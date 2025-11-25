@@ -9,6 +9,7 @@ import {
   StudentLateTracking,
   NotificationInput,
 } from "../types/attendance";
+import { getSMSEventHandler } from "./SMSEventHandler";
 
 export class AttendanceService {
   static async processQRScan(scanData: QRScanRequest): Promise<{
@@ -142,6 +143,28 @@ export class AttendanceService {
     }
 
     const studentWithDetails = await this.getStudentWithDetails(student.id);
+
+    // ========================================================================
+    // SMS EVENT EMISSION - Non-blocking SMS notification
+    // ========================================================================
+    try {
+      const smsHandler = getSMSEventHandler();
+      smsHandler.emitTimeInEvent({
+        attendanceLogId: attendanceLog.id,
+        studentId: student.id,
+        attendanceDate: new Date(today),
+        timeIn: timeString,
+        isLate: isLate,
+        lateMinutes: lateMinutes,
+      });
+      console.log(
+        `[Attendance Service] SMS event emitted for student ${student.id}`
+      );
+    } catch (error) {
+      // Don't throw - SMS failure shouldn't block attendance
+      console.error("[Attendance Service] Failed to emit SMS event:", error);
+    }
+    // ========================================================================
 
     return {
       student: studentWithDetails,
