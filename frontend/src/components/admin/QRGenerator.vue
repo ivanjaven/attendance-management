@@ -1,6 +1,5 @@
 <template>
   <div class="space-y-6">
-    <!-- Header -->
     <div class="flex justify-between items-center">
       <div>
         <h3 class="text-xl font-semibold text-gray-900">QR Code Generator</h3>
@@ -12,7 +11,7 @@
           :disabled="isLoading"
           class="btn-secondary"
         >
-          Select All
+          Select All Loaded
         </button>
         <button
           @click="clearSelection"
@@ -24,11 +23,10 @@
       </div>
     </div>
 
-    <!-- Stats -->
     <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
       <div class="card-compact">
-        <h4 class="text-sm font-medium text-gray-600">Total Students</h4>
-        <p class="text-2xl font-bold text-gray-900">{{ students.length }}</p>
+        <h4 class="text-sm font-medium text-gray-600">Total Students (DB)</h4>
+        <p class="text-2xl font-bold text-gray-900">{{ totalStudents }}</p>
       </div>
       <div class="card-compact">
         <h4 class="text-sm font-medium text-gray-600">Selected</h4>
@@ -44,10 +42,9 @@
       </div>
     </div>
 
-    <!-- Search and Filters -->
     <div class="flex flex-col sm:flex-row gap-4">
       <div class="flex-1">
-        <label for="search" class="sr-only">Search students</label>
+        <label for="search" class="sr-only">Search loaded students</label>
         <div class="relative">
           <MagnifyingGlassIcon
             class="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400"
@@ -56,7 +53,7 @@
             id="search"
             v-model="searchQuery"
             type="text"
-            placeholder="Search by name or student ID..."
+            placeholder="Search loaded students by name or ID..."
             class="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md leading-5 bg-white placeholder-gray-500 focus:outline-none focus:placeholder-gray-400 focus:ring-1 focus:ring-primary-500 focus:border-primary-500 sm:text-sm"
           />
         </div>
@@ -72,7 +69,6 @@
       </select>
     </div>
 
-    <!-- Action Buttons -->
     <div class="flex flex-col sm:flex-row gap-3">
       <button
         @click="generateSelectedQRCodes"
@@ -103,15 +99,6 @@
       </button>
     </div>
 
-    <!-- Loading State -->
-    <div v-if="isLoading && students.length === 0" class="text-center py-8">
-      <div
-        class="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600 mx-auto"
-      ></div>
-      <p class="mt-2 text-gray-600">Loading students...</p>
-    </div>
-
-    <!-- Error State -->
     <div v-if="error" class="bg-red-50 border border-red-200 rounded-md p-4">
       <div class="flex">
         <ExclamationTriangleIcon class="h-5 w-5 text-red-400" />
@@ -119,7 +106,7 @@
           <h3 class="text-sm font-medium text-red-800">Error</h3>
           <p class="mt-1 text-sm text-red-700">{{ error }}</p>
           <button
-            @click="loadData"
+            @click="loadStudents(true)"
             class="mt-2 text-sm bg-red-600 text-white px-3 py-1 rounded hover:bg-red-700"
           >
             Try Again
@@ -128,8 +115,7 @@
       </div>
     </div>
 
-    <!-- Students Table -->
-    <div v-if="!isLoading && students.length > 0" class="card overflow-hidden">
+    <div class="card overflow-hidden">
       <div class="overflow-x-auto">
         <table class="min-w-full divide-y divide-gray-200">
           <thead class="bg-gray-50">
@@ -167,67 +153,85 @@
             </tr>
           </thead>
           <tbody class="bg-white divide-y divide-gray-200">
-            <tr
-              v-for="student in filteredStudents"
-              :key="student.id"
-              :class="{ 'bg-blue-50': selectedStudents.includes(student.id) }"
-            >
-              <td class="px-6 py-4 whitespace-nowrap">
-                <input
-                  type="checkbox"
-                  :checked="selectedStudents.includes(student.id)"
-                  @change="toggleStudentSelection(student.id)"
-                  class="rounded border-gray-300 text-primary-600 shadow-sm focus:border-primary-300 focus:ring focus:ring-primary-200 focus:ring-opacity-50"
-                />
-              </td>
-              <td
-                class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900"
+            <template v-if="filteredStudents.length > 0">
+              <tr
+                v-for="student in filteredStudents"
+                :key="student.id"
+                :class="{
+                  'bg-blue-50': selectedStudents.includes(student.id),
+                }"
               >
-                {{ student.student_id }}
-              </td>
-              <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                {{ getFullName(student) }}
-              </td>
-              <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
-                Grade {{ student.level || student.level_id }}
-              </td>
-              <td
-                class="px-6 py-4 whitespace-nowrap text-sm font-medium space-x-2"
-              >
-                <button
-                  @click="generateSingleQR(student.id)"
-                  :disabled="isLoading"
-                  class="text-primary-600 hover:text-primary-900"
+                <td class="px-6 py-4 whitespace-nowrap">
+                  <input
+                    type="checkbox"
+                    :checked="selectedStudents.includes(student.id)"
+                    @change="toggleStudentSelection(student.id)"
+                    class="rounded border-gray-300 text-primary-600 shadow-sm focus:border-primary-300 focus:ring focus:ring-primary-200 focus:ring-opacity-50"
+                  />
+                </td>
+                <td
+                  class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900"
                 >
-                  Generate QR
-                </button>
-                <button
-                  v-if="getGeneratedQR(student.id)"
-                  @click="downloadSingleQR(student.id)"
-                  class="text-green-600 hover:text-green-900"
+                  {{ student.student_id }}
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                  {{ getFullName(student) }}
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
+                  Grade {{ student.level }}
+                </td>
+                <td
+                  class="px-6 py-4 whitespace-nowrap text-sm font-medium space-x-2"
                 >
-                  Download
-                </button>
-              </td>
-            </tr>
+                  <button
+                    @click="generateSingleQR(student.id)"
+                    :disabled="isLoading"
+                    class="text-primary-600 hover:text-primary-900"
+                  >
+                    Generate QR
+                  </button>
+                  <button
+                    v-if="getGeneratedQR(student.id)"
+                    @click="downloadSingleQR(student.id)"
+                    class="text-green-600 hover:text-green-900"
+                  >
+                    Download
+                  </button>
+                </td>
+              </tr>
+            </template>
+            <template v-else>
+              <tr>
+                <td colspan="5" class="px-6 py-8 text-center text-gray-500">
+                  No students found matching your filters
+                </td>
+              </tr>
+            </template>
           </tbody>
         </table>
       </div>
+
+      <div class="px-6 py-4 border-t border-gray-200 text-center">
+        <div v-if="isLoading" class="flex justify-center items-center py-2">
+          <div
+            class="animate-spin rounded-full h-6 w-6 border-b-2 border-primary-600 mr-2"
+          ></div>
+          <span class="text-gray-600">Loading students...</span>
+        </div>
+        <button
+          v-else-if="hasMoreStudents"
+          @click="loadMore"
+          class="text-primary-600 hover:text-primary-800 font-medium text-sm"
+        >
+          Load More Students ({{ students.length }} of
+          {{ totalStudents }} loaded)
+        </button>
+        <p v-else class="text-sm text-gray-500">
+          All {{ students.length }} students loaded
+        </p>
+      </div>
     </div>
 
-    <!-- Empty State -->
-    <div
-      v-if="!isLoading && students.length === 0 && !error"
-      class="text-center py-8"
-    >
-      <UsersIcon class="mx-auto h-12 w-12 text-gray-400" />
-      <h3 class="mt-2 text-sm font-medium text-gray-900">No students found</h3>
-      <p class="mt-1 text-sm text-gray-500">
-        Get started by adding some students to the system.
-      </p>
-    </div>
-
-    <!-- Generated QR Codes Preview -->
     <div v-if="generatedQRCodes.length > 0" class="card">
       <h4 class="text-lg font-semibold text-gray-900 mb-4">
         Generated QR Codes
@@ -268,7 +272,6 @@ import {
   ArrowDownTrayIcon,
   PrinterIcon,
   ExclamationTriangleIcon,
-  UsersIcon,
 } from "@heroicons/vue/24/outline";
 
 // State
@@ -276,12 +279,17 @@ const students = ref<Student[]>([]);
 const levels = ref<Level[]>([]);
 const selectedStudents = ref<number[]>([]);
 const generatedQRCodes = ref<Array<{ studentId: string; qrCodeImage: string }>>(
-  []
+  [],
 );
 const isLoading = ref(false);
 const error = ref<string>("");
 const searchQuery = ref("");
 const selectedLevel = ref("");
+
+// Pagination State
+const page = ref(1);
+const limit = ref(20);
+const totalStudents = ref(0);
 
 // Computed
 const filteredStudents = computed(() => {
@@ -293,15 +301,16 @@ const filteredStudents = computed(() => {
     filtered = filtered.filter(
       (student) =>
         student.student_id.toLowerCase().includes(query) ||
-        getFullName(student).toLowerCase().includes(query)
+        getFullName(student).toLowerCase().includes(query),
     );
   }
 
   // Filter by level
   if (selectedLevel.value) {
+    // Ensure we compare strings to numbers correctly, or simple equality
+    // student.level is now explicitly a number from the backend mapping
     filtered = filtered.filter(
-      (student) =>
-        (student.level || student.level_id).toString() === selectedLevel.value
+      (student) => student.level == Number(selectedLevel.value),
     );
   }
 
@@ -312,9 +321,13 @@ const isAllSelected = computed(() => {
   return (
     filteredStudents.value.length > 0 &&
     filteredStudents.value.every((student) =>
-      selectedStudents.value.includes(student.id)
+      selectedStudents.value.includes(student.id),
     )
   );
+});
+
+const hasMoreStudents = computed(() => {
+  return students.value.length < totalStudents.value;
 });
 
 // Methods
@@ -325,23 +338,56 @@ const getFullName = (student: Student): string => {
   return parts.join(" ");
 };
 
-const loadData = async () => {
+const loadLevels = async () => {
+  try {
+    const levelsData = await AdminService.getLevels();
+    levels.value = levelsData;
+  } catch (err: any) {
+    console.error("Failed to load levels:", err);
+  }
+};
+
+const loadStudents = async (reset = false) => {
   try {
     isLoading.value = true;
     error.value = "";
 
-    const [studentsData, levelsData] = await Promise.all([
-      AdminService.getStudents(),
-      AdminService.getLevels(),
-    ]);
+    if (reset) {
+      page.value = 1;
+      students.value = [];
+    }
 
-    students.value = studentsData;
-    levels.value = levelsData;
+    // Pass page and limit to the service
+    const response = await AdminService.getStudents(page.value, limit.value);
+
+    // Handle the response structure with pagination
+    if (response.data) {
+      if (reset) {
+        students.value = response.data;
+      } else {
+        students.value = [...students.value, ...response.data];
+      }
+
+      // Update total from pagination metadata if available
+      if (response.pagination) {
+        totalStudents.value = response.pagination.total;
+      } else {
+        // Fallback if pagination metadata isn't strictly typed yet
+        totalStudents.value = students.value.length;
+      }
+    }
   } catch (err: any) {
-    console.error("Failed to load data:", err);
-    error.value = err.message || "Failed to load data";
+    console.error("Failed to load students:", err);
+    error.value = err.message || "Failed to load students";
   } finally {
     isLoading.value = false;
+  }
+};
+
+const loadMore = () => {
+  if (hasMoreStudents.value && !isLoading.value) {
+    page.value++;
+    loadStudents(false);
   }
 };
 
@@ -359,19 +405,20 @@ const toggleAllSelection = () => {
     // Deselect all filtered students
     const filteredIds = filteredStudents.value.map((s) => s.id);
     selectedStudents.value = selectedStudents.value.filter(
-      (id) => !filteredIds.includes(id)
+      (id) => !filteredIds.includes(id),
     );
   } else {
     // Select all filtered students
     const filteredIds = filteredStudents.value.map((s) => s.id);
     const newSelections = filteredIds.filter(
-      (id) => !selectedStudents.value.includes(id)
+      (id) => !selectedStudents.value.includes(id),
     );
     selectedStudents.value.push(...newSelections);
   }
 };
 
 const selectAllStudents = () => {
+  // Selects all *loaded* students
   selectedStudents.value = students.value.map((s) => s.id);
 };
 
@@ -405,7 +452,7 @@ const generateSelectedQRCodes = async () => {
   try {
     isLoading.value = true;
     const response = await AdminService.generateBatchQRCodes(
-      selectedStudents.value
+      selectedStudents.value,
     );
 
     if (response.success && response.data) {
@@ -422,7 +469,7 @@ const generateSelectedQRCodes = async () => {
 const getGeneratedQR = (studentId: number) => {
   const student = students.value.find((s) => s.id === studentId);
   return generatedQRCodes.value.find(
-    (qr) => qr.studentId === student?.student_id
+    (qr) => qr.studentId === student?.student_id,
   );
 };
 
@@ -492,7 +539,7 @@ const printAllAsPDF = () => {
             <img src="${qr.qrCodeImage}" alt="QR Code for ${qr.studentId}" />
             <p>${qr.studentId}</p>
           </div>
-        `
+        `,
           )
           .join("")}
       </div>
@@ -508,6 +555,7 @@ const printAllAsPDF = () => {
 
 // Lifecycle
 onMounted(() => {
-  loadData();
+  loadLevels();
+  loadStudents(true);
 });
 </script>

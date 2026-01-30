@@ -22,7 +22,8 @@ interface StudentWithRelations {
 
 /**
  * GET /api/admin/students
- * Get all students for admin purposes
+ * Get all students for admin purposes with pagination
+ * Query params: page (default 1), limit (default 20)
  */
 router.get(
   "/students",
@@ -30,7 +31,19 @@ router.get(
   requireAdmin,
   async (req: Request, res: Response): Promise<void> => {
     try {
-      const { data: students, error } = (await supabase
+      const page = parseInt(req.query.page as string) || 1;
+      const limit = parseInt(req.query.limit as string) || 20;
+      const start = (page - 1) * limit;
+      const end = start + limit - 1;
+
+      // Fetch students with pagination and relations
+      // CRITICAL FIX: Removed '!inner' from specializations to use Left Join.
+      // This ensures students with NULL specialization (Grade 3-10) are still returned.
+      const {
+        data: students,
+        error,
+        count,
+      } = (await supabase
         .from("students")
         .select(
           `
@@ -45,13 +58,16 @@ router.get(
           created_at,
           levels!inner(level),
           sections!inner(section_name),
-          specializations!inner(specialization_name)
-        `
+          specializations(specialization_name)
+        `,
+          { count: "exact" },
         )
         .is("deleted_at", null)
-        .order("student_id")) as {
+        .order("student_id")
+        .range(start, end)) as {
         data: StudentWithRelations[] | null;
         error: any;
+        count: number | null;
       };
 
       if (error) {
@@ -72,9 +88,11 @@ router.get(
           last_name: student.last_name,
           middle_name: student.middle_name,
           level_id: student.level_id,
+          // Map the nested level value to the top level for the dropdown filter to work
           level: student.levels?.level,
           specialization_id: student.specialization_id,
-          specialization_name: student.specializations?.specialization_name,
+          specialization_name:
+            student.specializations?.specialization_name || "N/A",
           section_id: student.section_id,
           section_name: student.sections?.section_name,
           created_at: student.created_at,
@@ -83,6 +101,12 @@ router.get(
       res.status(200).json({
         success: true,
         data: transformedStudents,
+        pagination: {
+          page,
+          limit,
+          total: count || 0,
+          totalPages: count ? Math.ceil(count / limit) : 0,
+        },
         message: "Students retrieved successfully",
       });
     } catch (error: any) {
@@ -92,7 +116,7 @@ router.get(
         error: error.message || "Failed to get students",
       });
     }
-  }
+  },
 );
 
 /**
@@ -132,7 +156,7 @@ router.get(
         error: error.message || "Failed to get levels",
       });
     }
-  }
+  },
 );
 
 /**
@@ -164,7 +188,7 @@ router.get(
       }
 
       const qrCodeImage = await QRCodeGenerator.generateStudentQRCode(
-        student.qr_token
+        student.qr_token,
       );
 
       res.status(200).json({
@@ -183,7 +207,7 @@ router.get(
         error: error.message || "Failed to generate QR code",
       });
     }
-  }
+  },
 );
 
 /**
@@ -235,7 +259,7 @@ router.post(
         error: error.message || "Failed to generate batch QR codes",
       });
     }
-  }
+  },
 );
 
 export { router as adminRoutes };

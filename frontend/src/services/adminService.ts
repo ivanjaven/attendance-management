@@ -7,11 +7,11 @@ export interface Student {
   last_name: string;
   middle_name?: string;
   level_id: number;
-  level?: number;
+  level?: number; // Added from flattened response
   specialization_id: number;
-  specialization_name?: string;
+  specialization_name?: string; // Added from flattened response
   section_id: number;
-  section_name?: string;
+  section_name?: string; // Added from flattened response
   created_at: string;
 }
 
@@ -20,120 +20,73 @@ export interface Level {
   level: number;
 }
 
-export interface QRCodeResponse {
-  success: boolean;
-  data?: {
-    student_id: string;
-    student_name: string;
-    qr_code_image: string;
-  };
-  message?: string;
-  error?: string;
+export interface PaginationMeta {
+  page: number;
+  limit: number;
+  total: number;
+  totalPages: number;
 }
 
-export interface BatchQRResponse {
+export interface StudentsResponse {
   success: boolean;
-  data?: Array<{
-    studentId: string;
-    qrCodeImage: string;
-  }>;
+  data: Student[];
+  pagination?: PaginationMeta;
   message?: string;
-  error?: string;
 }
 
-export class AdminService {
+export const AdminService = {
   /**
-   * Get all students for admin purposes
+   * Get all students with pagination
+   * @param page Page number (default 1)
+   * @param limit Items per page (default 20)
    */
-  static async getStudents(): Promise<Student[]> {
+  async getStudents(page = 1, limit = 20): Promise<StudentsResponse> {
     try {
-      const response = await api.get<{
-        success: boolean;
-        data: Student[];
-        message: string;
-      }>("/admin/students");
-
-      if (response.data.success) {
-        return response.data.data;
-      } else {
-        throw new Error("Failed to fetch students");
-      }
-    } catch (error: any) {
-      if (error.response?.status === 403) {
-        throw new Error("Admin access required");
-      }
-      throw new Error(
-        error.response?.data?.error || "Failed to fetch students"
+      // Pass pagination params to the backend
+      const response = await api.get(
+        `/admin/students?page=${page}&limit=${limit}`,
       );
+      return response.data;
+    } catch (error) {
+      throw error;
     }
-  }
+  },
 
   /**
    * Get all levels for dropdown
    */
-  static async getLevels(): Promise<Level[]> {
+  async getLevels(): Promise<Level[]> {
     try {
-      const response = await api.get<{
-        success: boolean;
-        data: Level[];
-        message: string;
-      }>("/admin/levels");
-
-      if (response.data.success) {
-        return response.data.data;
-      } else {
-        throw new Error("Failed to fetch levels");
-      }
-    } catch (error: any) {
-      if (error.response?.status === 403) {
-        throw new Error("Admin access required");
-      }
-      throw new Error(error.response?.data?.error || "Failed to fetch levels");
+      const response = await api.get("/admin/levels");
+      return response.data.data;
+    } catch (error) {
+      throw error;
     }
-  }
+  },
 
   /**
-   * Generate QR code for a single student
+   * Generate QR code for a specific student
    */
-  static async generateStudentQRCode(
-    studentId: number
-  ): Promise<QRCodeResponse> {
+  async generateStudentQRCode(studentId: number) {
     try {
-      const response = await api.get<QRCodeResponse>(
-        `/admin/students/${studentId}/qr-code`
-      );
+      const response = await api.get(`/admin/students/${studentId}/qr-code`);
       return response.data;
-    } catch (error: any) {
-      if (error.response?.status === 403) {
-        throw new Error("Admin access required");
-      } else if (error.response?.status === 404) {
-        throw new Error("Student not found");
-      }
-      throw new Error(
-        error.response?.data?.error || "Failed to generate QR code"
-      );
+    } catch (error) {
+      throw error;
     }
-  }
+  },
 
   /**
-   * Generate QR codes for multiple students
+   * Generate QR codes for a batch of students
    */
-  static async generateBatchQRCodes(
-    studentIds: number[]
-  ): Promise<BatchQRResponse> {
+  async generateBatchQRCodes(studentIds: number[]) {
     try {
-      const response = await api.post<BatchQRResponse>(
-        "/admin/students/batch-qr-codes",
-        { student_ids: studentIds }
-      );
+      const response = await api.post("/admin/students/batch-qr-codes", {
+        student_ids: studentIds,
+      });
       return response.data;
-    } catch (error: any) {
-      if (error.response?.status === 403) {
-        throw new Error("Admin access required");
-      }
-      throw new Error(
-        error.response?.data?.error || "Failed to generate batch QR codes"
-      );
+    } catch (error) {
+      throw error;
     }
-  }
-}
+  },
+};
