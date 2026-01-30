@@ -6,12 +6,30 @@ import {
   Student,
   AttendanceLog,
   Quarter,
-  StudentLateTracking,
-  NotificationInput,
 } from "../types/attendance";
 import { getSMSEventHandler } from "./SMSEventHandler";
 
 export class AttendanceService {
+  /**
+   * Helper to get the current date in Philippines Time (YYYY-MM-DD)
+   * This guarantees that 1:00 AM Jan 31st is recorded as Jan 31st.
+   */
+  private static getPhDate(): string {
+    return new Date().toLocaleDateString("en-CA", {
+      timeZone: "Asia/Manila",
+    });
+  }
+
+  /**
+   * Helper to get the current time in Philippines Time (HH:MM:SS)
+   */
+  private static getPhTime(): string {
+    return new Date().toLocaleTimeString("en-GB", {
+      timeZone: "Asia/Manila",
+      hour12: false,
+    });
+  }
+
   static async processQRScan(scanData: QRScanRequest): Promise<{
     student: any;
     attendanceLog: AttendanceLog;
@@ -23,12 +41,12 @@ export class AttendanceService {
   }> {
     try {
       const originalQRToken = await QRSecurityService.validateAndDecodeQRCode(
-        scanData.qr_token
+        scanData.qr_token,
       );
 
       if (!originalQRToken) {
         throw new Error(
-          "Invalid or tampered QR code. Please contact administrator."
+          "Invalid or tampered QR code. Please contact administrator.",
         );
       }
 
@@ -37,7 +55,8 @@ export class AttendanceService {
         throw new Error("Invalid QR code. Student not found.");
       }
 
-      const today = new Date().toISOString().split("T")[0];
+      // FIX: Use explicit PH Date
+      const today = this.getPhDate();
       const existingLog = await this.getAttendanceLogForDate(student.id, today);
 
       if (!existingLog || !existingLog.time_in) {
@@ -57,7 +76,7 @@ export class AttendanceService {
   private static async processTimeIn(
     student: Student,
     today: string,
-    existingLog: AttendanceLog | null
+    existingLog: AttendanceLog | null,
   ): Promise<{
     student: any;
     attendanceLog: AttendanceLog;
@@ -67,8 +86,8 @@ export class AttendanceService {
     totalLateMinutes?: number;
     notificationTriggered?: boolean;
   }> {
-    const currentTime = new Date();
-    const timeString = currentTime.toTimeString().split(" ")[0];
+    // FIX: Use explicit PH Time
+    const timeString = this.getPhTime();
 
     const currentQuarter = await this.getCurrentQuarter();
     if (!currentQuarter) {
@@ -89,7 +108,7 @@ export class AttendanceService {
           time_in: timeString,
           is_late: isLate,
           late_minutes: lateMinutes,
-          updated_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(), // Standard UTC timestamp for system auditing is fine
         })
         .eq("id", existingLog.id)
         .select()
@@ -125,7 +144,7 @@ export class AttendanceService {
       const lateTrackingResult = await this.updateLateTracking(
         student.id,
         currentQuarter.id,
-        lateMinutes
+        lateMinutes,
       );
       totalLateMinutes = lateTrackingResult.totalLateMinutes;
 
@@ -133,7 +152,7 @@ export class AttendanceService {
         notificationTriggered = await this.sendLateThresholdNotification(
           student.id,
           student.adviser_id,
-          totalLateMinutes
+          totalLateMinutes,
         );
 
         if (notificationTriggered) {
@@ -144,9 +163,7 @@ export class AttendanceService {
 
     const studentWithDetails = await this.getStudentWithDetails(student.id);
 
-    // ========================================================================
-    // SMS EVENT EMISSION - Non-blocking SMS notification
-    // ========================================================================
+    // SMS EVENT EMISSION
     try {
       const smsHandler = getSMSEventHandler();
       smsHandler.emitTimeInEvent({
@@ -158,13 +175,11 @@ export class AttendanceService {
         lateMinutes: lateMinutes,
       });
       console.log(
-        `[Attendance Service] SMS event emitted for student ${student.id}`
+        `[Attendance Service] SMS event emitted for student ${student.id}`,
       );
     } catch (error) {
-      // Don't throw - SMS failure shouldn't block attendance
       console.error("[Attendance Service] Failed to emit SMS event:", error);
     }
-    // ========================================================================
 
     return {
       student: studentWithDetails,
@@ -179,15 +194,15 @@ export class AttendanceService {
 
   private static async processTimeOut(
     student: Student,
-    existingLog: AttendanceLog
+    existingLog: AttendanceLog,
   ): Promise<{
     student: any;
     attendanceLog: AttendanceLog;
     isLate: boolean;
     action: "time_out";
   }> {
-    const currentTime = new Date();
-    const timeString = currentTime.toTimeString().split(" ")[0];
+    // FIX: Use explicit PH Time
+    const timeString = this.getPhTime();
 
     const { data, error } = await supabase
       .from("attendance_log")
@@ -214,7 +229,7 @@ export class AttendanceService {
   }
 
   private static async findStudentByQRToken(
-    qrToken: string
+    qrToken: string,
   ): Promise<Student | null> {
     const { data, error } = await supabase
       .from("students")
@@ -302,7 +317,7 @@ export class AttendanceService {
 
   private static async getAttendanceLogForDate(
     studentId: number,
-    date: string
+    date: string,
   ): Promise<AttendanceLog | null> {
     const { data, error } = await supabase
       .from("attendance_log")
@@ -330,7 +345,8 @@ export class AttendanceService {
   }
 
   private static async getCurrentQuarter(): Promise<Quarter | null> {
-    const today = new Date().toISOString().split("T")[0];
+    // FIX: Use PH Date for Quarter checking
+    const today = this.getPhDate();
     const { data, error } = await supabase
       .from("quarters")
       .select("*")
@@ -356,7 +372,7 @@ export class AttendanceService {
 
   private static calculateIsLate(
     arrivalTime: string,
-    schoolStartTime: string
+    schoolStartTime: string,
   ): boolean {
     const arrival = new Date(`1970-01-01T${arrivalTime}`);
     const schoolStart = new Date(`1970-01-01T${schoolStartTime}`);
@@ -370,7 +386,7 @@ export class AttendanceService {
 
   private static calculateLateMinutes(
     arrivalTime: string,
-    schoolStartTime: string
+    schoolStartTime: string,
   ): number {
     const arrival = new Date(`1970-01-01T${arrivalTime}`);
     const schoolStart = new Date(`1970-01-01T${schoolStartTime}`);
@@ -386,7 +402,7 @@ export class AttendanceService {
   private static async updateLateTracking(
     studentId: number,
     quarterId: number,
-    lateMinutes: number
+    lateMinutes: number,
   ): Promise<{ totalLateMinutes: number; notificationSent: boolean }> {
     const { data: existingTracking, error: fetchError } = await supabase
       .from("student_late_tracking")
@@ -440,7 +456,7 @@ export class AttendanceService {
   private static async sendLateThresholdNotification(
     studentId: number,
     teacherId: number,
-    totalLateMinutes: number
+    totalLateMinutes: number,
   ): Promise<boolean> {
     try {
       const message = `Student has exceeded the 70-minute late threshold with ${totalLateMinutes} minutes of tardiness this quarter.`;
@@ -464,7 +480,7 @@ export class AttendanceService {
 
   private static async markNotificationSent(
     studentId: number,
-    quarterId: number
+    quarterId: number,
   ): Promise<void> {
     const { error } = await supabase
       .from("student_late_tracking")

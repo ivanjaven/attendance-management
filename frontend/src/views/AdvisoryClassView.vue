@@ -1,6 +1,5 @@
 <template>
   <div class="min-h-screen bg-gray-50">
-    <!-- Header -->
     <header class="bg-white shadow">
       <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div class="flex items-center justify-between py-6">
@@ -37,11 +36,8 @@
       </div>
     </header>
 
-    <!-- Stats Cards -->
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-      <!-- Stats Cards with Skeleton Loading -->
       <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-        <!-- Present Card -->
         <div class="card-compact">
           <div class="flex items-center">
             <div class="flex-shrink-0">
@@ -64,7 +60,6 @@
           </div>
         </div>
 
-        <!-- Late Card -->
         <div class="card-compact">
           <div class="flex items-center">
             <div class="flex-shrink-0">
@@ -87,7 +82,6 @@
           </div>
         </div>
 
-        <!-- Absent Card -->
         <div class="card-compact">
           <div class="flex items-center">
             <div class="flex-shrink-0">
@@ -110,7 +104,6 @@
           </div>
         </div>
 
-        <!-- Attendance Rate Card -->
         <div class="card-compact">
           <div class="flex items-center">
             <div class="flex-shrink-0">
@@ -134,9 +127,7 @@
         </div>
       </div>
 
-      <!-- Attendance Records Table -->
       <div class="card">
-        <!-- Table Header -->
         <div class="px-6 py-4 border-b border-gray-200">
           <div class="flex items-center justify-between">
             <div>
@@ -146,7 +137,6 @@
               <p class="text-gray-600">View and manage student attendance</p>
             </div>
             <div class="flex items-center space-x-3">
-              <!-- Search -->
               <div class="relative">
                 <input
                   v-model="searchQuery"
@@ -159,7 +149,6 @@
                   class="absolute left-3 top-2.5 h-5 w-5 text-gray-600"
                 />
               </div>
-              <!-- Date Filter -->
               <select
                 v-model="selectedPeriod"
                 @change="handlePeriodChange"
@@ -173,7 +162,6 @@
             </div>
           </div>
 
-          <!-- Custom Date Range -->
           <div
             v-if="selectedPeriod === 'custom'"
             class="mt-4 flex items-center space-x-4"
@@ -203,9 +191,7 @@
           </div>
         </div>
 
-        <!-- Table Content -->
         <div class="overflow-x-auto">
-          <!-- Skeleton Loading Table -->
           <TableSkeleton
             v-if="loading"
             :headers="[
@@ -219,7 +205,6 @@
             :rows="10"
           />
 
-          <!-- Actual Table -->
           <table v-else class="min-w-full divide-y divide-gray-200">
             <thead class="bg-gray-50">
               <tr>
@@ -256,7 +241,6 @@
               </tr>
             </thead>
             <tbody class="bg-white divide-y divide-gray-200">
-              <!-- No Records State -->
               <tr v-if="studentRecords.length === 0">
                 <td colspan="6" class="px-6 py-12 text-center">
                   <UsersIcon class="mx-auto h-12 w-12 text-gray-300" />
@@ -269,13 +253,11 @@
                 </td>
               </tr>
 
-              <!-- Student Records -->
               <tr
                 v-for="record in studentRecords"
                 :key="record.id"
                 class="hover:bg-gray-50 transition-colors"
               >
-                <!-- Student Info -->
                 <td class="px-6 py-4 whitespace-nowrap">
                   <div class="flex items-center">
                     <div
@@ -296,22 +278,18 @@
                   </div>
                 </td>
 
-                <!-- Date -->
                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                   {{ formatDate(record.attendance_date) }}
                 </td>
 
-                <!-- Time In -->
                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                   {{ record.time_in || "-" }}
                 </td>
 
-                <!-- Time Out -->
                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                   {{ record.time_out || "-" }}
                 </td>
 
-                <!-- Status -->
                 <td class="px-6 py-4 whitespace-nowrap">
                   <span
                     class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium"
@@ -321,7 +299,6 @@
                   </span>
                 </td>
 
-                <!-- Late Minutes -->
                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                   <span
                     v-if="record.late_minutes > 0"
@@ -336,7 +313,6 @@
           </table>
         </div>
 
-        <!-- Pagination -->
         <div
           v-if="!loading && studentRecords.length > 0"
           class="px-6 py-4 flex items-center justify-between border-t border-gray-200"
@@ -347,7 +323,7 @@
             {{
               Math.min(
                 pagination.current_page * pagination.per_page,
-                pagination.total_records
+                pagination.total_records,
               )
             }}
             of {{ pagination.total_records }} results
@@ -445,7 +421,7 @@ const totalPresent = computed(() => teacherSummary.value?.present_today ?? 0);
 const totalLate = computed(() => teacherSummary.value?.late_today ?? 0);
 const totalAbsent = computed(() => teacherSummary.value?.absent_today ?? 0);
 const attendanceRate = computed(() =>
-  (teacherSummary.value?.attendance_percentage ?? 0).toFixed(1)
+  (teacherSummary.value?.attendance_percentage ?? 0).toFixed(1),
 );
 
 const visiblePages = computed(() => {
@@ -467,29 +443,55 @@ const visiblePages = computed(() => {
   return pages;
 });
 
+// Helper: Get Current Date in PH Time
+const getPhDate = (date: Date = new Date()) => {
+  // Returns date string in YYYY-MM-DD format based on Asia/Manila time
+  return date.toLocaleDateString("en-CA", {
+    timeZone: "Asia/Manila",
+  });
+};
+
 // Methods
 const getFilters = (): StudentRecordsFilter => {
-  const today = new Date();
+  // Use PH time for "today" calculation
+  const now = new Date();
+
+  // Format dates strictly in PH Time
   let dateFrom = "";
   let dateTo = "";
 
   switch (selectedPeriod.value) {
     case "today":
-      dateFrom = dateTo = today.toISOString().split("T")[0];
+      dateFrom = dateTo = getPhDate(now);
       break;
     case "week":
-      const weekStart = new Date(today);
-      weekStart.setDate(today.getDate() - today.getDay());
-      const weekEnd = new Date(weekStart);
-      weekEnd.setDate(weekStart.getDate() + 6);
-      dateFrom = weekStart.toISOString().split("T")[0];
-      dateTo = weekEnd.toISOString().split("T")[0];
+      // Get the current day of the week in PH time (0-6)
+      const phDateString = now.toLocaleDateString("en-US", {
+        timeZone: "Asia/Manila",
+      });
+      const phNow = new Date(phDateString);
+      const day = phNow.getDay();
+
+      const diff = phNow.getDate() - day + (day === 0 ? -6 : 1); // Adjust when day is Sunday
+
+      const weekStart = new Date(phNow.setDate(diff));
+      const weekEnd = new Date(phNow.setDate(weekStart.getDate() + 6));
+
+      // Use helper to ensure formatting stays correct
+      dateFrom = getPhDate(weekStart);
+      dateTo = getPhDate(weekEnd);
       break;
     case "month":
-      const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
-      const monthEnd = new Date(today.getFullYear(), today.getMonth() + 1, 0);
-      dateFrom = monthStart.toISOString().split("T")[0];
-      dateTo = monthEnd.toISOString().split("T")[0];
+      const phDateStringM = now.toLocaleDateString("en-US", {
+        timeZone: "Asia/Manila",
+      });
+      const phNowM = new Date(phDateStringM);
+
+      const monthStart = new Date(phNowM.getFullYear(), phNowM.getMonth(), 1);
+      const monthEnd = new Date(phNowM.getFullYear(), phNowM.getMonth() + 1, 0);
+
+      dateFrom = getPhDate(monthStart);
+      dateTo = getPhDate(monthEnd);
       break;
     case "custom":
       dateFrom = customDateFrom.value;
@@ -510,6 +512,7 @@ const loadStudentRecords = async () => {
   loading.value = true;
   try {
     const filters = getFilters();
+    console.log("Loading records with date filter:", filters.date_from); // Debugging
     const response = await getStudentRecords(filters);
     if (response.success && response.data) {
       let records = response.data.records;
@@ -520,7 +523,7 @@ const loadStudentRecords = async () => {
         records = records.filter(
           (record) =>
             record.student_name.toLowerCase().includes(query) ||
-            record.student_id.toLowerCase().includes(query)
+            record.student_id.toLowerCase().includes(query),
         );
       }
 

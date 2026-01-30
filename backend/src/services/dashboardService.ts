@@ -15,10 +15,51 @@ import {
 
 export class DashboardService {
   /**
+   * Helper to get the current date in Philippines Time (YYYY-MM-DD)
+   */
+  private static getPhDate(): string {
+    return new Date().toLocaleDateString("en-CA", {
+      timeZone: "Asia/Manila",
+    });
+  }
+
+  /**
+   * Helper to check if a specific date is a valid school day
+   * Returns false for Weekends (Sat/Sun) and Holidays/No-Class days in calendar
+   */
+  private static async isSchoolDay(dateStr: string): Promise<boolean> {
+    // 1. Check if Weekend (Saturday or Sunday)
+    // We create a date object and force PH timezone interpretation
+    const dateObj = new Date(dateStr);
+    // Note: getDay() depends on local time, so we must be careful.
+    // Since dateStr is YYYY-MM-DD, new Date(dateStr) is UTC midnight.
+    // But Sat/Sun are Sat/Sun in UTC too.
+    const dayOfWeek = dateObj.getDay();
+    if (dayOfWeek === 0 || dayOfWeek === 6) {
+      return false;
+    }
+
+    // 2. Check School Calendar (if table has data)
+    // If table is empty, we assume weekdays are school days.
+    const { data: calendarDay } = await supabase
+      .from("school_calendar")
+      .select("is_school_day")
+      .eq("calendar_date", dateStr)
+      .single();
+
+    if (calendarDay) {
+      return calendarDay.is_school_day;
+    }
+
+    // Default to true for weekdays if no calendar entry
+    return true;
+  }
+
+  /**
    * Get teacher's today summary for advisory class
    */
   static async getTeacherTodaySummary(
-    teacher: Teacher
+    teacher: Teacher,
   ): Promise<TeacherTodaySummary> {
     try {
       if (
@@ -36,6 +77,7 @@ export class DashboardService {
         };
       }
 
+      // Fetch Class Details
       const [levelResult, specializationResult, sectionResult] =
         await Promise.all([
           supabase
@@ -61,6 +103,7 @@ export class DashboardService {
       const section = sectionResult.data?.section_name || "Unknown";
       const advisoryClass = `Grade ${level} - ${specialization} - ${section}`;
 
+      // Get Total Students
       const { data: students } = await supabase
         .from("students")
         .select("id")
@@ -71,19 +114,23 @@ export class DashboardService {
 
       const totalStudents = students?.length || 0;
 
-      if (totalStudents === 0) {
+      // FIX: Check if Today is a School Day
+      const today = this.getPhDate();
+      const isSchoolDay = await this.isSchoolDay(today);
+
+      // If it is NOT a school day (Saturday/Sunday), return 0 absences
+      if (!isSchoolDay || totalStudents === 0) {
         return {
           advisory_class: advisoryClass,
-          total_students: 0,
+          total_students: totalStudents,
           present_today: 0,
-          absent_today: 0,
+          absent_today: 0, // 0 Absences because no class
           late_today: 0,
           attendance_percentage: 0,
         };
       }
 
-      // Get today's attendance
-      const today = new Date().toISOString().split("T")[0];
+      // If it IS a school day, calculate attendance
       const studentIds = students?.map((s) => s.id) || [];
 
       const { data: todayAttendance } = await supabase
@@ -121,7 +168,7 @@ export class DashboardService {
   static async getTeacherNotifications(
     teacher: Teacher,
     page: number = 1,
-    limit: number = 10
+    limit: number = 10,
   ): Promise<{
     notifications: TeacherNotification[];
     pagination: {
@@ -132,9 +179,13 @@ export class DashboardService {
     };
   }> {
     try {
-      // First, check and create new notifications
-      await this.check70MinuteNotifications(teacher.auth_id);
-      await this.checkConsecutiveAbsenceNotifications(teacher);
+      // FIX: Only check for NEW notifications if today is a School Day
+      // This prevents generating alerts on weekends
+      const today = this.getPhDate();
+      if (await this.isSchoolDay(today)) {
+        await this.check70MinuteNotifications(teacher.auth_id);
+        await this.checkConsecutiveAbsenceNotifications(teacher);
+      }
 
       // Get total count
       const { count: totalCount } = await supabase
@@ -176,7 +227,6 @@ export class DashboardService {
           .single();
 
         if (student) {
-          // Determine notification type from message content
           let notificationType: "EXCEEDED_70_MINUTES" | "CONSECUTIVE_ABSENCE";
           let metadata: any = {};
 
@@ -220,18 +270,12 @@ export class DashboardService {
 
   /**
    * Get all students in advisory class with their attendance status
-   * This will show ALL students including absent ones
-   */
-  /**
-   * Get all students in advisory class with their attendance status
-   * Only shows records for actual school days from school_calendar
    */
   static async getStudentRecords(
     teacher: Teacher,
-    filters: StudentRecordsFilter
+    filters: StudentRecordsFilter,
   ): Promise<StudentRecordsResponse> {
     try {
-      // Check if teacher has advisory assignment
       if (
         !teacher.advisory_level_id ||
         !teacher.advisory_specialization_id ||
@@ -248,7 +292,6 @@ export class DashboardService {
         };
       }
 
-      // Get all students in the advisory class
       let studentsQuery = supabase
         .from("students")
         .select("id, student_id, first_name, last_name, middle_name")
@@ -257,7 +300,6 @@ export class DashboardService {
         .eq("section_id", teacher.advisory_section_id)
         .is("deleted_at", null);
 
-      // Apply student filter if specified
       if (filters.student_id) {
         studentsQuery = studentsQuery.eq("id", filters.student_id);
       }
@@ -276,12 +318,10 @@ export class DashboardService {
         };
       }
 
-      // Set up date range (default to today if no filters)
-      const today = new Date().toISOString().split("T")[0];
+      const today = this.getPhDate();
       const dateFrom = filters.date_from || today;
       const dateTo = filters.date_to || today;
 
-      // Get only school days from school_calendar
       const { data: schoolDays, error: calendarError } = await supabase
         .from("school_calendar")
         .select("calendar_date")
@@ -294,10 +334,8 @@ export class DashboardService {
         throw new Error("Failed to fetch school calendar");
       }
 
-      // If no school calendar data, fall back to weekdays only
       const validDates = schoolDays?.map((day) => day.calendar_date) || [];
       if (validDates.length === 0) {
-        // Fallback: generate weekdays only
         const fallbackDates = [];
         for (
           let date = new Date(dateFrom);
@@ -305,34 +343,31 @@ export class DashboardService {
           date.setDate(date.getDate() + 1)
         ) {
           const dayOfWeek = date.getDay();
+          // Filter out weekends from fallback logic
           if (dayOfWeek >= 1 && dayOfWeek <= 5) {
-            // Monday-Friday
             fallbackDates.push(date.toISOString().split("T")[0]);
           }
         }
         validDates.push(...fallbackDates);
       }
 
-      // Get all attendance records for these students in the date range
       const studentIds = allStudents.map((s) => s.id);
       const { data: attendanceRecords } = await supabase
         .from("attendance_log")
         .select(
-          "student_id, attendance_date, time_in, time_out, is_late, late_minutes"
+          "student_id, attendance_date, time_in, time_out, is_late, late_minutes",
         )
         .in("student_id", studentIds)
         .gte("attendance_date", dateFrom)
         .lte("attendance_date", dateTo)
         .is("deleted_at", null);
 
-      // Create a map of attendance records by student and date
       const attendanceMap = new Map<string, any>();
       attendanceRecords?.forEach((record) => {
         const key = `${record.student_id}-${record.attendance_date}`;
         attendanceMap.set(key, record);
       });
 
-      // Generate records for ONLY school days
       const allRecords: StudentRecord[] = [];
 
       for (const student of allStudents) {
@@ -344,7 +379,6 @@ export class DashboardService {
           .filter(Boolean)
           .join(" ");
 
-        // Only loop through valid school days
         for (const dateStr of validDates) {
           const attendanceKey = `${student.id}-${dateStr}`;
           const attendanceRecord = attendanceMap.get(attendanceKey);
@@ -400,12 +434,9 @@ export class DashboardService {
     }
   }
 
-  /**
-   * Mark notification as read
-   */
   static async markNotificationAsRead(
     notificationId: number,
-    teacherId: string
+    teacherId: string,
   ): Promise<void> {
     try {
       const { error } = await supabase
@@ -423,9 +454,10 @@ export class DashboardService {
     }
   }
 
-  // Private helper methods
+  // Helper Methods
+
   private static async getAdvisoryStudentIds(
-    teacher: Teacher
+    teacher: Teacher,
   ): Promise<number[]> {
     const { data: students } = await supabase
       .from("students")
@@ -439,7 +471,7 @@ export class DashboardService {
   }
 
   private static async getCurrentQuarter() {
-    const today = new Date().toISOString().split("T")[0];
+    const today = this.getPhDate();
 
     const { data: quarter } = await supabase
       .from("quarters")
@@ -453,7 +485,7 @@ export class DashboardService {
   }
 
   private static async getConsecutiveAbsentStudents(
-    studentIds: number[]
+    studentIds: number[],
   ): Promise<
     Array<{
       name: string;
@@ -462,15 +494,17 @@ export class DashboardService {
     }>
   > {
     const result = [];
-    const today = new Date();
 
+    // Consecutive logic
     for (const studentId of studentIds) {
       let consecutiveDays = 0;
-      let checkDate = new Date(today);
+      let checkDate = new Date();
 
-      // Check last 7 days
       for (let i = 0; i < 7; i++) {
-        const dateStr = checkDate.toISOString().split("T")[0];
+        // Force date interpretation to PH Time
+        const dateStr = checkDate.toLocaleDateString("en-CA", {
+          timeZone: "Asia/Manila",
+        });
 
         const { data: attendance } = await supabase
           .from("attendance_log")
@@ -513,9 +547,11 @@ export class DashboardService {
    */
   static async getSchoolAttendanceStats(): Promise<SchoolAttendanceStats> {
     try {
-      const today = new Date().toISOString().split("T")[0];
+      const today = this.getPhDate();
 
-      // Get total students count
+      // FIX: Check if Today is a School Day
+      const isSchoolDay = await this.isSchoolDay(today);
+
       const { data: allStudents } = await supabase
         .from("students")
         .select("id")
@@ -523,11 +559,12 @@ export class DashboardService {
 
       const totalStudents = allStudents?.length || 0;
 
-      if (totalStudents === 0) {
+      // If NOT a school day, return 0 for everything
+      if (!isSchoolDay || totalStudents === 0) {
         return {
-          total_students: 0,
+          total_students: totalStudents,
           present_today: 0,
-          absent_today: 0,
+          absent_today: 0, // No absentees on weekend
           late_today: 0,
           on_time_today: 0,
           attendance_percentage: 0,
@@ -535,7 +572,7 @@ export class DashboardService {
         };
       }
 
-      // Get today's attendance
+      // If IS a school day
       const { data: todayAttendance } = await supabase
         .from("attendance_log")
         .select("id, is_late")
@@ -567,49 +604,38 @@ export class DashboardService {
       };
     } catch (error: any) {
       throw new Error(
-        `Failed to get school attendance stats: ${error.message}`
+        `Failed to get school attendance stats: ${error.message}`,
       );
     }
   }
 
-  /**
-   * Get all school students stats with filters (Admin only)
-   */
+  // (Remaining methods getSchoolStudentsStats, updateSchoolStartTime, etc. kept same,
+  // just need to ensure they are inside the class)
+
   static async getSchoolStudentsStats(
-    filters: SchoolStudentsFilter
+    filters: SchoolStudentsFilter,
   ): Promise<SchoolStudentsStats> {
+    // ... [Same implementation as previous file]
+    // To save space I am not repeating unchanged large blocks,
+    // but in your file make sure to keep getSchoolStudentsStats logic here.
     try {
       // Build base query
       let query = supabase
         .from("students")
         .select(
-          `
-          id,
-          student_id,
-          first_name,
-          last_name,
-          middle_name,
-          level_id,
-          specialization_id,
-          section_id,
-          adviser_id
-        `,
-          { count: "exact" }
+          `id, student_id, first_name, last_name, middle_name, level_id, specialization_id, section_id, adviser_id`,
+          { count: "exact" },
         )
         .is("deleted_at", null);
 
-      if (filters.level_id) {
-        query = query.eq("level_id", filters.level_id);
-      }
-      if (filters.specialization_id) {
+      if (filters.level_id) query = query.eq("level_id", filters.level_id);
+      if (filters.specialization_id)
         query = query.eq("specialization_id", filters.specialization_id);
-      }
-      if (filters.section_id) {
+      if (filters.section_id)
         query = query.eq("section_id", filters.section_id);
-      }
       if (filters.search) {
         query = query.or(
-          `first_name.ilike.%${filters.search}%,last_name.ilike.%${filters.search}%,student_id.ilike.%${filters.search}%`
+          `first_name.ilike.%${filters.search}%,last_name.ilike.%${filters.search}%,student_id.ilike.%${filters.search}%`,
         );
       }
 
@@ -649,35 +675,27 @@ export class DashboardService {
                 .single(),
             ]);
 
-          // Get attendance summary for current quarter
           const attendanceSummary = await this.getStudentAttendanceSummary(
-            student.id
+            student.id,
           );
-
-          const fullName = `${student.first_name} ${
-            student.middle_name ? student.middle_name + " " : ""
-          }${student.last_name}`;
-          const adviserName = adviserData.data
-            ? `${adviserData.data.first_name} ${adviserData.data.last_name}`
-            : "No Adviser";
 
           studentRecords.push({
             id: student.id,
             student_id: student.student_id,
-            full_name: fullName,
+            full_name: `${student.first_name} ${student.middle_name ? student.middle_name + " " : ""}${student.last_name}`,
             level: levelData.data?.level || 0,
             specialization:
               specializationData.data?.specialization_name || "Unknown",
             section: sectionData.data?.section_name || "Unknown",
-            adviser_name: adviserName,
+            adviser_name: adviserData.data
+              ? `${adviserData.data.first_name} ${adviserData.data.last_name}`
+              : "No Adviser",
             attendance_summary: attendanceSummary,
           });
         }
       }
 
-      // Get summary stats
       const summary = await this.getSchoolStudentsSummary(filters);
-
       const totalRecords = count || 0;
       const totalPages = Math.ceil(totalRecords / filters.limit);
 
@@ -696,17 +714,10 @@ export class DashboardService {
     }
   }
 
-  /**
-   * Update school start time for current quarter (Admin only)
-   */
   static async updateSchoolStartTime(schoolStartTime: string): Promise<void> {
     try {
       const currentQuarter = await this.getCurrentQuarter();
-
-      if (!currentQuarter) {
-        throw new Error("No active quarter found");
-      }
-
+      if (!currentQuarter) throw new Error("No active quarter found");
       const { error } = await supabase
         .from("quarters")
         .update({
@@ -714,24 +725,16 @@ export class DashboardService {
           updated_at: new Date().toISOString(),
         })
         .eq("id", currentQuarter.id);
-
       if (error) throw error;
     } catch (error: any) {
       throw new Error(`Failed to update school start time: ${error.message}`);
     }
   }
 
-  /**
-   * Get current quarter info (Admin only)
-   */
   static async getCurrentQuarterInfo(): Promise<CurrentQuarter | null> {
     try {
       const quarter = await this.getCurrentQuarter();
-
-      if (!quarter) {
-        return null;
-      }
-
+      if (!quarter) return null;
       return {
         id: quarter.id,
         quarter_name: quarter.quarter_name,
@@ -744,11 +747,50 @@ export class DashboardService {
     }
   }
 
-  // Private helper methods for admin/staff functionality
+  static async getTeacherUnreadNotificationCount(
+    teacher: Teacher,
+  ): Promise<number> {
+    try {
+      // FIX: Only generate new notifications on school days
+      const today = this.getPhDate();
+      if (await this.isSchoolDay(today)) {
+        await this.check70MinuteNotifications(teacher.auth_id);
+        await this.checkConsecutiveAbsenceNotifications(teacher);
+      }
+
+      const { data, error, count } = await supabase
+        .from("notifications")
+        .select("id", { count: "exact" })
+        .eq("teacher_id", teacher.auth_id)
+        .neq("status", "Read");
+      if (error) throw error;
+      return count || 0;
+    } catch (error: any) {
+      console.error("Error getting unread notification count:", error);
+      return 0;
+    }
+  }
+
+  static async markAllNotificationsAsRead(teacherId: string): Promise<void> {
+    try {
+      const { error } = await supabase
+        .from("notifications")
+        .update({ status: "Read", updated_at: new Date().toISOString() })
+        .eq("teacher_id", teacherId)
+        .neq("status", "Read");
+      if (error) throw error;
+    } catch (error: any) {
+      throw new Error(
+        `Failed to mark all notifications as read: ${error.message}`,
+      );
+    }
+  }
+
+  // ... [Other helper methods kept same as previous context]
+
   private static async getStudentAttendanceSummary(studentId: number) {
     const currentQuarter = await this.getCurrentQuarter();
-
-    if (!currentQuarter) {
+    if (!currentQuarter)
       return {
         present_days: 0,
         late_days: 0,
@@ -756,9 +798,7 @@ export class DashboardService {
         total_late_minutes: 0,
         attendance_percentage: 0,
       };
-    }
 
-    // Get attendance data for current quarter
     const { data: attendance } = await supabase
       .from("attendance_log")
       .select("id, is_late, late_minutes")
@@ -766,16 +806,14 @@ export class DashboardService {
       .gte("attendance_date", currentQuarter.start_date)
       .lte("attendance_date", currentQuarter.end_date)
       .is("deleted_at", null);
-
     const presentDays = attendance?.length || 0;
     const lateDays = attendance?.filter((a) => a.is_late).length || 0;
     const totalLateMinutes =
       attendance?.reduce((sum, a) => sum + a.late_minutes, 0) || 0;
 
-    // Calculate school days in quarter (simple weekday count)
     const quarterSchoolDays = await this.calculateSchoolDaysInPeriod(
       currentQuarter.start_date,
-      currentQuarter.end_date
+      currentQuarter.end_date,
     );
     const absentDays = Math.max(0, quarterSchoolDays - presentDays);
     const attendancePercentage =
@@ -793,7 +831,6 @@ export class DashboardService {
   }
 
   private static async getSchoolStudentsSummary(filters: SchoolStudentsFilter) {
-    // Get total counts by level, specialization, section
     const [levelCounts, specializationCounts, sectionCounts, totalCount] =
       await Promise.all([
         this.getLevelCounts(filters),
@@ -801,7 +838,6 @@ export class DashboardService {
         this.getSectionCounts(filters),
         this.getTotalStudentsCount(filters),
       ]);
-
     return {
       total_students: totalCount,
       by_level: levelCounts,
@@ -811,46 +847,32 @@ export class DashboardService {
   }
 
   private static async getLevelCounts(
-    filters: SchoolStudentsFilter
+    filters: SchoolStudentsFilter,
   ): Promise<Array<{ level: number; count: number }>> {
     let query = supabase
       .from("students")
       .select("level_id")
       .is("deleted_at", null);
-
-    // Apply filters (excluding level_id since we're counting by level)
-    if (filters.specialization_id) {
+    if (filters.specialization_id)
       query = query.eq("specialization_id", filters.specialization_id);
-    }
-    if (filters.section_id) {
-      query = query.eq("section_id", filters.section_id);
-    }
-    if (filters.search) {
+    if (filters.section_id) query = query.eq("section_id", filters.section_id);
+    if (filters.search)
       query = query.or(
-        `first_name.ilike.%${filters.search}%,last_name.ilike.%${filters.search}%,student_id.ilike.%${filters.search}%`
+        `first_name.ilike.%${filters.search}%,last_name.ilike.%${filters.search}%,student_id.ilike.%${filters.search}%`,
       );
-    }
-
     const { data: studentData } = await query;
-
-    if (!studentData || studentData.length === 0) {
-      return [];
-    }
-
+    if (!studentData || studentData.length === 0) return [];
     const uniqueLevelIds = [
       ...new Set(studentData.map((item) => item.level_id)),
     ];
-
     const { data: levelData } = await supabase
       .from("levels")
       .select("id, level")
       .in("id", uniqueLevelIds);
-
     const counts: { [key: number]: number } = {};
     studentData.forEach((item) => {
       counts[item.level_id] = (counts[item.level_id] || 0) + 1;
     });
-
     return (
       levelData?.map((level) => ({
         level: level.level,
@@ -860,47 +882,32 @@ export class DashboardService {
   }
 
   private static async getSpecializationCounts(
-    filters: SchoolStudentsFilter
+    filters: SchoolStudentsFilter,
   ): Promise<Array<{ specialization: string; count: number }>> {
     let query = supabase
       .from("students")
       .select("specialization_id")
       .is("deleted_at", null);
-
-    // Apply filters (excluding specialization_id since we're counting by specialization)
-    if (filters.level_id) {
-      query = query.eq("level_id", filters.level_id);
-    }
-    if (filters.section_id) {
-      query = query.eq("section_id", filters.section_id);
-    }
-    if (filters.search) {
+    if (filters.level_id) query = query.eq("level_id", filters.level_id);
+    if (filters.section_id) query = query.eq("section_id", filters.section_id);
+    if (filters.search)
       query = query.or(
-        `first_name.ilike.%${filters.search}%,last_name.ilike.%${filters.search}%,student_id.ilike.%${filters.search}%`
+        `first_name.ilike.%${filters.search}%,last_name.ilike.%${filters.search}%,student_id.ilike.%${filters.search}%`,
       );
-    }
-
     const { data: studentData } = await query;
-
-    if (!studentData || studentData.length === 0) {
-      return [];
-    }
-
+    if (!studentData || studentData.length === 0) return [];
     const uniqueSpecializationIds = [
       ...new Set(studentData.map((item) => item.specialization_id)),
     ];
-
     const { data: specializationData } = await supabase
       .from("specializations")
       .select("id, specialization_name")
       .in("id", uniqueSpecializationIds);
-
     const counts: { [key: number]: number } = {};
     studentData.forEach((item) => {
       counts[item.specialization_id] =
         (counts[item.specialization_id] || 0) + 1;
     });
-
     return (
       specializationData?.map((specialization) => ({
         specialization: specialization.specialization_name,
@@ -910,45 +917,32 @@ export class DashboardService {
   }
 
   private static async getSectionCounts(
-    filters: SchoolStudentsFilter
+    filters: SchoolStudentsFilter,
   ): Promise<Array<{ section: string; count: number }>> {
     let query = supabase
       .from("students")
       .select("section_id")
       .is("deleted_at", null);
-
-    if (filters.level_id) {
-      query = query.eq("level_id", filters.level_id);
-    }
-    if (filters.specialization_id) {
+    if (filters.level_id) query = query.eq("level_id", filters.level_id);
+    if (filters.specialization_id)
       query = query.eq("specialization_id", filters.specialization_id);
-    }
-    if (filters.search) {
+    if (filters.search)
       query = query.or(
-        `first_name.ilike.%${filters.search}%,last_name.ilike.%${filters.search}%,student_id.ilike.%${filters.search}%`
+        `first_name.ilike.%${filters.search}%,last_name.ilike.%${filters.search}%,student_id.ilike.%${filters.search}%`,
       );
-    }
-
     const { data: studentData } = await query;
-
-    if (!studentData || studentData.length === 0) {
-      return [];
-    }
-
+    if (!studentData || studentData.length === 0) return [];
     const uniqueSectionIds = [
       ...new Set(studentData.map((item) => item.section_id)),
     ];
-
     const { data: sectionData } = await supabase
       .from("sections")
       .select("id, section_name")
       .in("id", uniqueSectionIds);
-
     const counts: { [key: number]: number } = {};
     studentData.forEach((item) => {
       counts[item.section_id] = (counts[item.section_id] || 0) + 1;
     });
-
     return (
       sectionData?.map((section) => ({
         section: section.section_name,
@@ -962,119 +956,80 @@ export class DashboardService {
       .from("students")
       .select("id", { count: "exact" })
       .is("deleted_at", null);
-
-    if (filters.level_id) {
-      query = query.eq("level_id", filters.level_id);
-    }
-    if (filters.specialization_id) {
+    if (filters.level_id) query = query.eq("level_id", filters.level_id);
+    if (filters.specialization_id)
       query = query.eq("specialization_id", filters.specialization_id);
-    }
-    if (filters.section_id) {
-      query = query.eq("section_id", filters.section_id);
-    }
-    if (filters.search) {
+    if (filters.section_id) query = query.eq("section_id", filters.section_id);
+    if (filters.search)
       query = query.or(
-        `first_name.ilike.%${filters.search}%,last_name.ilike.%${filters.search}%,student_id.ilike.%${filters.search}%`
+        `first_name.ilike.%${filters.search}%,last_name.ilike.%${filters.search}%,student_id.ilike.%${filters.search}%`,
       );
-    }
-
     const { count } = await query;
     return count || 0;
   }
 
   private static async calculateSchoolDaysInPeriod(
     startDate: string,
-    endDate: string
+    endDate: string,
   ): Promise<number> {
-    // First, get school calendar data for the period
     const { data: calendarDays, error } = await supabase
       .from("school_calendar")
       .select("calendar_date, is_school_day")
       .gte("calendar_date", startDate)
       .lte("calendar_date", endDate);
-
-    if (error) {
-      console.error("Error fetching school calendar:", error);
-      // Fallback to old method if school_calendar fails
+    if (error || !calendarDays || calendarDays.length === 0)
       return this.calculateSchoolDaysInPeriodFallback(startDate, endDate);
-    }
-
-    if (!calendarDays || calendarDays.length === 0) {
-      // If no calendar data exists, fall back to weekday-only calculation
-      return this.calculateSchoolDaysInPeriodFallback(startDate, endDate);
-    }
-
-    // Count only days marked as school days in the calendar
     return calendarDays.filter((day) => day.is_school_day).length;
   }
 
-  // Keep the old method as fallback
   private static calculateSchoolDaysInPeriodFallback(
     startDate: string,
-    endDate: string
+    endDate: string,
   ): number {
     const start = new Date(startDate);
     const end = new Date(endDate);
     let schoolDays = 0;
     const currentDate = new Date(start);
-
     while (currentDate <= end) {
       const dayOfWeek = currentDate.getDay();
-      // Monday = 1, Friday = 5 (excluding weekends)
-      if (dayOfWeek >= 1 && dayOfWeek <= 5) {
-        schoolDays++;
-      }
+      if (dayOfWeek >= 1 && dayOfWeek <= 5) schoolDays++;
       currentDate.setDate(currentDate.getDate() + 1);
     }
-
     return schoolDays;
   }
 
-  /**
-   * Check and create 70-minute exceeded notifications
-   */
   private static async check70MinuteNotifications(
-    teacherId: string
+    teacherId: string,
   ): Promise<void> {
     try {
-      // Get current quarter
       const quarter = await this.getCurrentQuarter();
       if (!quarter) return;
-
-      // Find students who exceeded 70 minutes but haven't been notified
       const { data: lateTrackingRecords } = await supabase
         .from("student_late_tracking")
         .select("student_id, total_late_minutes")
         .eq("quarter_id", quarter.id)
         .gte("total_late_minutes", 70)
         .eq("notification_sent", false);
-
       if (!lateTrackingRecords || lateTrackingRecords.length === 0) return;
-
-      // Check each student belongs to this teacher and create notifications
       for (const record of lateTrackingRecords) {
-        // Get student info and check if they belong to this teacher
         const { data: student } = await supabase
           .from("students")
           .select("id, first_name, last_name, student_id, adviser_id")
           .eq("id", record.student_id)
           .eq("adviser_id", teacherId)
           .single();
-
         if (student) {
           const message = `${student.first_name} ${student.last_name} has exceeded the 70-minute late limit with ${record.total_late_minutes} minutes total.`;
-
-          // Insert notification
-          await supabase.from("notifications").insert({
-            student_id: student.id,
-            teacher_id: teacherId,
-            type: "Alert",
-            message,
-            sent_at: new Date().toISOString(),
-            status: "Sent",
-          });
-
-          // Mark as notified
+          await supabase
+            .from("notifications")
+            .insert({
+              student_id: student.id,
+              teacher_id: teacherId,
+              type: "Alert",
+              message,
+              sent_at: new Date().toISOString(),
+              status: "Sent",
+            });
           await supabase
             .from("student_late_tracking")
             .update({ notification_sent: true })
@@ -1087,36 +1042,25 @@ export class DashboardService {
     }
   }
 
-  /**
-   * Check and create 3-consecutive-day absence notifications
-   */
   private static async checkConsecutiveAbsenceNotifications(
-    teacher: Teacher
+    teacher: Teacher,
   ): Promise<void> {
     try {
-      // Get teacher's advisory students
       const advisoryStudents = await this.getAdvisoryStudentIds(teacher);
       if (advisoryStudents.length === 0) return;
-
-      // Check each student's last 3 school days
       for (const studentId of advisoryStudents) {
         const lastThreeSchoolDays = await this.getLastSchoolDays(3);
-
-        // Check if student was absent all 3 days
         const { data: attendanceRecords } = await supabase
           .from("attendance_log")
           .select("attendance_date")
           .eq("student_id", studentId)
           .in("attendance_date", lastThreeSchoolDays)
           .is("deleted_at", null);
-
         const attendedDays =
           attendanceRecords?.map((r) => r.attendance_date) || [];
         const absentDays = lastThreeSchoolDays.filter(
-          (day) => !attendedDays.includes(day)
+          (day) => !attendedDays.includes(day),
         );
-
-        // If absent all 3 days, check if notification already sent
         if (absentDays.length === 3) {
           const { data: existingNotification } = await supabase
             .from("notifications")
@@ -1127,26 +1071,24 @@ export class DashboardService {
             .like("message", "%consecutive%")
             .gte("sent_at", `${lastThreeSchoolDays[0]}T00:00:00`)
             .single();
-
           if (!existingNotification) {
-            // Get student info
             const { data: student } = await supabase
               .from("students")
               .select("first_name, last_name, student_id")
               .eq("id", studentId)
               .single();
-
             if (student) {
               const message = `${student.first_name} ${student.last_name} has been absent for 3 consecutive school days.`;
-
-              await supabase.from("notifications").insert({
-                student_id: studentId,
-                teacher_id: teacher.auth_id,
-                type: "Alert",
-                message,
-                sent_at: new Date().toISOString(),
-                status: "Sent",
-              });
+              await supabase
+                .from("notifications")
+                .insert({
+                  student_id: studentId,
+                  teacher_id: teacher.auth_id,
+                  type: "Alert",
+                  message,
+                  sent_at: new Date().toISOString(),
+                  status: "Sent",
+                });
             }
           }
         }
@@ -1156,86 +1098,27 @@ export class DashboardService {
     }
   }
 
-  /**
-   * Get last N school days (excluding weekends and holidays)
-   */
   private static async getLastSchoolDays(count: number): Promise<string[]> {
     const schoolDays: string[] = [];
     let currentDate = new Date();
-
     while (schoolDays.length < count) {
       currentDate.setDate(currentDate.getDate() - 1);
-      const dayOfWeek = currentDate.getDay();
-
-      // Skip weekends (Sunday = 0, Saturday = 6)
+      const phDateStr = currentDate.toLocaleDateString("en-CA", {
+        timeZone: "Asia/Manila",
+      });
+      const phDate = new Date(phDateStr);
+      const dayOfWeek = phDate.getDay();
       if (dayOfWeek !== 0 && dayOfWeek !== 6) {
-        const dateStr = currentDate.toISOString().split("T")[0];
-
-        // Check if it's a school day (if you have school_calendar data)
         const { data: calendarEntry } = await supabase
           .from("school_calendar")
           .select("is_school_day")
-          .eq("calendar_date", dateStr)
+          .eq("calendar_date", phDateStr)
           .single();
-
-        // If no calendar entry, assume it's a school day
         if (!calendarEntry || calendarEntry.is_school_day) {
-          schoolDays.unshift(dateStr); // Add to beginning to maintain chronological order
+          schoolDays.unshift(phDateStr);
         }
       }
     }
-
     return schoolDays;
-  }
-
-  // backend/src/services/dashboardService.ts
-
-  /**
-   * Get unread notification count for teacher - NEW METHOD
-   */
-  static async getTeacherUnreadNotificationCount(
-    teacher: Teacher
-  ): Promise<number> {
-    try {
-      // First, check and create new notifications
-      await this.check70MinuteNotifications(teacher.auth_id);
-      await this.checkConsecutiveAbsenceNotifications(teacher);
-
-      // Get count of unread notifications
-      const { data, error, count } = await supabase
-        .from("notifications")
-        .select("id", { count: "exact" })
-        .eq("teacher_id", teacher.auth_id)
-        .neq("status", "Read");
-
-      if (error) throw error;
-
-      return count || 0;
-    } catch (error: any) {
-      console.error("Error getting unread notification count:", error);
-      return 0;
-    }
-  }
-
-  /**
-   * Mark all notifications as read for teacher - NEW METHOD
-   */
-  static async markAllNotificationsAsRead(teacherId: string): Promise<void> {
-    try {
-      const { error } = await supabase
-        .from("notifications")
-        .update({
-          status: "Read",
-          updated_at: new Date().toISOString(),
-        })
-        .eq("teacher_id", teacherId)
-        .neq("status", "Read"); // Only update unread notifications
-
-      if (error) throw error;
-    } catch (error: any) {
-      throw new Error(
-        `Failed to mark all notifications as read: ${error.message}`
-      );
-    }
   }
 }
